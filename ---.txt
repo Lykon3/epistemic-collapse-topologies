@@ -1,0 +1,710 @@
+﻿"""
+Enhanced GovBidPro: AI-Powered Contract Analysis with Advanced Document Intelligence
+================================================================================
+
+
+Merging sophisticated text analysis with government contracting and academic partnership
+contract analysis to detect hidden patterns, compliance risks, and negotiation advantages.
+
+
+Key Enhancements:
+- Cryptographic pattern detection for hidden clauses or unusual modifications
+- Entropy analysis to identify sections with anomalous language patterns
+- Cross-version analysis to track contract evolution and identify changes
+- Advanced compliance risk scoring using multiple analytical methods
+- Intelligent clause extraction and risk assessment
+"""
+
+
+import os
+import sys
+import logging
+import re
+import numpy as np
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
+from dataclasses import dataclass, field
+from collections import Counter
+from scipy.stats import entropy
+import difflib
+
+
+# Import the existing GovBidPro components
+from govbidpro_with_ca_module import (
+    GovContractConfig, AcademicPartnershipConfig, SystemConfig,
+    PDFParser, TextProcessor, ResearchPartnershipAnalyzer
+)
+
+
+class AdvancedContractAnalyzer:
+    """
+    Advanced contract analyzer that combines traditional contract analysis
+    with sophisticated text pattern detection and cryptographic analysis.
+    """
+    
+    def __init__(self, config: SystemConfig):
+        self.config = config
+        self.logger = logging.getLogger("AdvancedContractAnalyzer")
+        self.text_processor = TextProcessor(config)
+        
+        # Initialize analyzers
+        self.research_analyzer = ResearchPartnershipAnalyzer(self.text_processor, config)
+        
+        # Advanced analysis patterns
+        self.hidden_risk_patterns = {
+            "unusual_termination": [
+                r'terminat(?:e|ion).*(?:sole|absolute|unfettered)\s+discretion',
+                r'terminat(?:e|ion).*without\s+(?:cause|reason|notice)',
+                r'automatic\s+terminat(?:e|ion)',
+            ],
+            "liability_shifting": [
+                r'(?:shall|will)\s+(?:indemnify|defend|hold\s+harmless).*(?:any|all)\s+claims',
+                r'liability.*unlimited',
+                r'consequential\s+damages.*not\s+(?:limited|excluded)',
+            ],
+            "ip_grabs": [
+                r'(?:all|any)\s+(?:improvements|modifications|derivative\s+works).*(?:shall\s+belong|property\s+of)',
+                r'background\s+(?:ip|intellectual\s+property).*(?:licensed|granted)',
+                r'work\s+(?:for\s+hire|made\s+for\s+hire)',
+            ],
+            "compliance_traps": [
+                r'failure\s+to\s+(?:comply|perform).*(?:material\s+breach|default)',
+                r'(?:certification|representation).*(?:continuing|ongoing)\s+(?:obligation|duty)',
+                r'(?:audit|inspection)\s+rights.*(?:any\s+time|without\s+notice)',
+            ],
+            "unusual_governing_law": [
+                r'governed\s+by.*(?:laws\s+of|jurisdiction\s+of).*(?!(?:state\s+of\s+)?(?:california|new\s+york|delaware))',
+                r'disputes.*(?:binding\s+)?arbitration.*(?:expedited|limited\s+discovery)',
+            ],
+        }
+        
+        # Federal contracting red flags
+        self.federal_risk_patterns = {
+            "far_violations": [
+                r'(?:subcontract|subcontracting).*(?:limitations|restrictions).*(?:waived|modified|inapplicable)',
+                r'small\s+business.*(?:goals|requirements).*(?:not\s+applicable|waived)',
+                r'(?:8\(a\)|hubzone|sdvosb|wosb).*requirements.*(?:modified|waived)',
+            ],
+            "cost_plus_risks": [
+                r'cost\s+(?:plus|reimbursement).*(?:without\s+limitation|unlimited)',
+                r'(?:overhead|indirect\s+costs).*(?:rate|percentage).*(?:to\s+be\s+determined|tbd)',
+            ],
+            "data_rights_issues": [
+                r'(?:government|contractor).*(?:unlimited|restricted)\s+rights.*(?:technical\s+data|computer\s+software)',
+                r'(?:proprietary|confidential).*(?:technical\s+data|computer\s+software).*government',
+            ],
+        }
+        
+    def analyze_contract_advanced(self, text: str, contract_type: str = "unknown") -> Dict[str, Any]:
+        """
+        Perform advanced analysis combining traditional contract review with
+        sophisticated pattern detection and anomaly identification.
+        
+        Args:
+            text: Contract text to analyze
+            contract_type: Type of contract (government, academic, commercial)
+            
+        Returns:
+            Comprehensive analysis results
+        """
+        self.logger.info(f"Starting advanced analysis of {contract_type} contract")
+        
+        results = {
+            "basic_analysis": {},
+            "entropy_analysis": {},
+            "pattern_analysis": {},
+            "compliance_analysis": {},
+            "risk_scoring": {},
+            "anomaly_detection": {},
+            "recommendations": []
+        }
+        
+        # Basic text analysis
+        results["basic_analysis"] = self._basic_text_analysis(text)
+        
+        # Entropy and complexity analysis
+        results["entropy_analysis"] = self._entropy_complexity_analysis(text)
+        
+        # Advanced pattern detection
+        results["pattern_analysis"] = self._advanced_pattern_analysis(text, contract_type)
+        
+        # Compliance risk analysis
+        results["compliance_analysis"] = self._compliance_risk_analysis(text, contract_type)
+        
+        # Anomaly detection
+        results["anomaly_detection"] = self._detect_anomalies(text)
+        
+        # Overall risk scoring
+        results["risk_scoring"] = self._calculate_risk_scores(results)
+        
+        # Generate actionable recommendations
+        results["recommendations"] = self._generate_advanced_recommendations(results, contract_type)
+        
+        self.logger.info("Advanced contract analysis complete")
+        return results
+    
+    def _basic_text_analysis(self, text: str) -> Dict[str, Any]:
+        """Perform basic statistical analysis of the contract text."""
+        
+        # Basic statistics
+        words = re.findall(r'\b\w+\b', text.lower())
+        sentences = re.split(r'[.!?]+', text)
+        paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
+        
+        # Calculate readability metrics
+        avg_words_per_sentence = len(words) / len(sentences) if sentences else 0
+        avg_sentences_per_paragraph = len(sentences) / len(paragraphs) if paragraphs else 0
+        
+        # Word frequency analysis
+        word_freq = Counter(words)
+        most_common = word_freq.most_common(20)
+        
+        # Legal term frequency
+        legal_terms = [
+            'shall', 'hereby', 'whereas', 'therefore', 'notwithstanding',
+            'pursuant', 'herein', 'thereof', 'hereof', 'heretofore'
+        ]
+        legal_term_freq = {term: word_freq.get(term, 0) for term in legal_terms}
+        
+        return {
+            "word_count": len(words),
+            "sentence_count": len(sentences),
+            "paragraph_count": len(paragraphs),
+            "avg_words_per_sentence": avg_words_per_sentence,
+            "avg_sentences_per_paragraph": avg_sentences_per_paragraph,
+            "most_common_words": most_common,
+            "legal_term_frequency": legal_term_freq,
+            "legal_density": sum(legal_term_freq.values()) / len(words) if words else 0
+        }
+    
+    def _entropy_complexity_analysis(self, text: str) -> Dict[str, Any]:
+        """Analyze text entropy and complexity patterns."""
+        
+        # Word-level entropy
+        words = re.findall(r'\b\w+\b', text.lower())
+        word_freq = Counter(words)
+        word_probs = np.array(list(word_freq.values())) / len(words)
+        word_entropy = entropy(word_probs)
+        
+        # Character-level entropy
+        chars = [c for c in text.lower() if c.isalpha()]
+        char_freq = Counter(chars)
+        char_probs = np.array(list(char_freq.values())) / len(chars)
+        char_entropy = entropy(char_probs)
+        
+        # Sentence length entropy
+        sentences = re.split(r'[.!?]+', text)
+        sentence_lengths = [len(s.split()) for s in sentences if s.strip()]
+        if sentence_lengths:
+            length_freq = Counter(sentence_lengths)
+            length_probs = np.array(list(length_freq.values())) / len(sentence_lengths)
+            length_entropy = entropy(length_probs)
+        else:
+            length_entropy = 0
+        
+        # Complexity indicators
+        unique_words = len(set(words))
+        vocabulary_richness = unique_words / len(words) if words else 0
+        
+        # Detect unusual entropy patterns (potential hidden information)
+        entropy_threshold = 4.0  # Typical English entropy
+        entropy_anomaly = word_entropy > entropy_threshold * 1.2 or word_entropy < entropy_threshold * 0.8
+        
+        return {
+            "word_entropy": word_entropy,
+            "character_entropy": char_entropy,
+            "sentence_length_entropy": length_entropy,
+            "vocabulary_richness": vocabulary_richness,
+            "unique_word_count": unique_words,
+            "entropy_anomaly_detected": entropy_anomaly,
+            "complexity_score": (word_entropy + char_entropy + vocabulary_richness) / 3
+        }
+    
+    def _advanced_pattern_analysis(self, text: str, contract_type: str) -> Dict[str, Any]:
+        """Detect advanced patterns and potential hidden risks."""
+        
+        results = {
+            "hidden_risks": {},
+            "federal_risks": {},
+            "unusual_clauses": [],
+            "pattern_anomalies": []
+        }
+        
+        # Detect hidden risk patterns
+        for risk_type, patterns in self.hidden_risk_patterns.items():
+            matches = self.text_processor.find_patterns(text, patterns, parallel=False)
+            risk_instances = []
+            
+            for pattern_key, pattern_matches in matches.items():
+                for start, end, matched_text in pattern_matches:
+                    context = self.text_processor.extract_context(text, start, end, 200)
+                    risk_instances.append({
+                        "matched_text": matched_text,
+                        "context": context,
+                        "position": start,
+                        "risk_level": self._assess_pattern_risk(matched_text, context)
+                    })
+            
+            results["hidden_risks"][risk_type] = risk_instances
+        
+        # Federal contracting specific risks
+        if contract_type in ["government", "federal"]:
+            for risk_type, patterns in self.federal_risk_patterns.items():
+                matches = self.text_processor.find_patterns(text, patterns, parallel=False)
+                risk_instances = []
+                
+                for pattern_key, pattern_matches in matches.items():
+                    for start, end, matched_text in pattern_matches:
+                        context = self.text_processor.extract_context(text, start, end, 200)
+                        risk_instances.append({
+                            "matched_text": matched_text,
+                            "context": context,
+                            "position": start,
+                            "compliance_risk": "high"
+                        })
+                
+                results["federal_risks"][risk_type] = risk_instances
+        
+        # Detect unusual clause structures
+        results["unusual_clauses"] = self._detect_unusual_clauses(text)
+        
+        # Pattern anomaly detection
+        results["pattern_anomalies"] = self._detect_pattern_anomalies(text)
+        
+        return results
+    
+    def _detect_unusual_clauses(self, text: str) -> List[Dict[str, Any]]:
+        """Detect clauses with unusual structure or language patterns."""
+        
+        unusual_clauses = []
+        
+        # Split into sections/clauses
+        sections = re.split(r'\n\s*\d+\.|\n\s*\([a-z]\)|\n\s*\(i+\)', text)
+        
+        for i, section in enumerate(sections):
+            if len(section.strip()) < 50:  # Skip very short sections
+                continue
+                
+            # Analyze each section for unusual patterns
+            words = re.findall(r'\b\w+\b', section.lower())
+            if not words:
+                continue
+                
+            # Calculate section-specific metrics
+            word_freq = Counter(words)
+            section_entropy = entropy(np.array(list(word_freq.values())))
+            
+            # Detect unusual characteristics
+            unusual_indicators = []
+            
+            # Extremely high or low entropy
+            if section_entropy > 6.0:
+                unusual_indicators.append("unusually_high_entropy")
+            elif section_entropy < 2.0:
+                unusual_indicators.append("unusually_low_entropy")
+            
+            # Excessive legal jargon
+            legal_terms = ['whereas', 'hereby', 'herein', 'thereof', 'notwithstanding']
+            legal_density = sum(word_freq.get(term, 0) for term in legal_terms) / len(words)
+            if legal_density > 0.05:  # More than 5% legal terms
+                unusual_indicators.append("excessive_legal_jargon")
+            
+            # Unusual word repetition
+            max_word_freq = max(word_freq.values()) if word_freq else 0
+            if max_word_freq > len(words) * 0.15:  # Single word appears >15% of the time
+                unusual_indicators.append("excessive_word_repetition")
+            
+            # Very long sentences
+            sentences = re.split(r'[.!?]+', section)
+            avg_sentence_length = sum(len(s.split()) for s in sentences) / len(sentences) if sentences else 0
+            if avg_sentence_length > 40:  # Very long sentences
+                unusual_indicators.append("extremely_long_sentences")
+            
+            if unusual_indicators:
+                unusual_clauses.append({
+                    "section_number": i,
+                    "section_preview": section[:200] + "..." if len(section) > 200 else section,
+                    "unusual_indicators": unusual_indicators,
+                    "entropy": section_entropy,
+                    "legal_density": legal_density,
+                    "avg_sentence_length": avg_sentence_length
+                })
+        
+        return unusual_clauses
+    
+    def _detect_pattern_anomalies(self, text: str) -> List[Dict[str, Any]]:
+        """Detect anomalous patterns that might indicate hidden information or unusual drafting."""
+        
+        anomalies = []
+        
+        # Whitespace pattern analysis
+        whitespace_patterns = re.findall(r'\s+', text)
+        space_lengths = [len(s) for s in whitespace_patterns]
+        space_freq = Counter(space_lengths)
+        
+        # Detect unusual spacing patterns
+        if len(set(space_lengths)) > 10:  # Too many different spacing patterns
+            anomalies.append({
+                "type": "unusual_whitespace_patterns",
+                "description": "Document contains unusually varied spacing patterns",
+                "severity": "medium",
+                "details": f"Found {len(set(space_lengths))} different spacing patterns"
+            })
+        
+        # Punctuation pattern analysis
+        punctuation = re.findall(r'[^\w\s]', text)
+        punct_freq = Counter(punctuation)
+        
+        # Unusual punctuation usage
+        for punct, count in punct_freq.items():
+            if punct in [';', ':', '—', '–'] and count > len(text.split()) * 0.02:
+                anomalies.append({
+                    "type": "unusual_punctuation_frequency",
+                    "description": f"Unusually high frequency of '{punct}' punctuation",
+                    "severity": "low",
+                    "details": f"'{punct}' appears {count} times"
+                })
+        
+        # Number pattern analysis
+        numbers = re.findall(r'\b\d+(?:\.\d+)?\b', text)
+        if numbers:
+            # Check for unusual number patterns
+            numeric_values = []
+            for num in numbers:
+                try:
+                    numeric_values.append(float(num))
+                except ValueError:
+                    pass
+            
+            if numeric_values:
+                # Check for repeating number patterns
+                num_freq = Counter(numeric_values)
+                most_common_num, max_freq = num_freq.most_common(1)[0]
+                
+                if max_freq > 5 and most_common_num not in [1, 2, 3, 5, 10, 30, 60, 90]:
+                    anomalies.append({
+                        "type": "unusual_number_repetition",
+                        "description": f"Number {most_common_num} appears {max_freq} times",
+                        "severity": "low",
+                        "details": "May indicate templated language or hidden pattern"
+                    })
+        
+        return anomalies
+    
+    def _assess_pattern_risk(self, matched_text: str, context: str) -> str:
+        """Assess the risk level of a detected pattern."""
+        
+        # High-risk indicators
+        high_risk_indicators = [
+            'without limitation', 'sole discretion', 'absolute', 'unlimited',
+            'all claims', 'any claims', 'consequential damages'
+        ]
+        
+        # Medium-risk indicators
+        medium_risk_indicators = [
+            'material breach', 'default', 'termination', 'indemnify'
+        ]
+        
+        context_lower = context.lower()
+        matched_lower = matched_text.lower()
+        
+        if any(indicator in context_lower or indicator in matched_lower 
+               for indicator in high_risk_indicators):
+            return "high"
+        elif any(indicator in context_lower or indicator in matched_lower 
+                 for indicator in medium_risk_indicators):
+            return "medium"
+        else:
+            return "low"
+    
+    def _compliance_risk_analysis(self, text: str, contract_type: str) -> Dict[str, Any]:
+        """Analyze compliance risks specific to contract type."""
+        
+        compliance_results = {
+            "overall_risk": "low",
+            "specific_risks": [],
+            "missing_clauses": [],
+            "regulatory_compliance": {}
+        }
+        
+        if contract_type in ["government", "federal"]:
+            compliance_results.update(self._analyze_federal_compliance(text))
+        elif contract_type == "academic":
+            compliance_results.update(self._analyze_academic_compliance(text))
+        
+        return compliance_results
+    
+    def _analyze_federal_compliance(self, text: str) -> Dict[str, Any]:
+        """Analyze federal contracting compliance requirements."""
+        
+        # Required FAR clauses for different contract types
+        required_clauses = {
+            "small_business": ["52.219-14", "52.219-8", "52.219-6"],
+            "8a": ["52.219-14", "52.219-17", "52.219-18"],
+            "general": ["52.204-21", "52.225-13", "52.233-1"]
+        }
+        
+        missing_clauses = []
+        found_clauses = []
+        
+        # Check for FAR clause references
+        far_pattern = r'(?:FAR|DFARS)?\s*52\.\d{3}-\d{1,2}'
+        far_matches = re.findall(far_pattern, text)
+        
+        for clause_type, clauses in required_clauses.items():
+            for clause in clauses:
+                if not any(clause in match for match in far_matches):
+                    missing_clauses.append({
+                        "clause": clause,
+                        "type": clause_type,
+                        "description": self.config.far_clauses.get(clause, {}).get("description", "Unknown"),
+                        "risk_level": self.config.far_clauses.get(clause, {}).get("risk_level", "medium")
+                    })
+                else:
+                    found_clauses.append(clause)
+        
+        # Calculate overall compliance risk
+        total_required = sum(len(clauses) for clauses in required_clauses.values())
+        missing_count = len(missing_clauses)
+        
+        if missing_count == 0:
+            overall_risk = "low"
+        elif missing_count / total_required < 0.3:
+            overall_risk = "medium"
+        else:
+            overall_risk = "high"
+        
+        return {
+            "overall_risk": overall_risk,
+            "missing_clauses": missing_clauses,
+            "found_clauses": found_clauses,
+            "compliance_score": (total_required - missing_count) / total_required if total_required > 0 else 1.0
+        }
+    
+    def _analyze_academic_compliance(self, text: str) -> Dict[str, Any]:
+        """Analyze academic partnership compliance requirements."""
+        
+        # Use the existing research partnership analyzer
+        research_results = self.research_analyzer.analyze_agreement(text)
+        
+        # Extract compliance-specific information
+        compliance_issues = research_results.get("compliance_issues", {})
+        conflict_analysis = research_results.get("conflict_analysis", {})
+        
+        # Calculate risk based on identified issues
+        high_risk_issues = sum(1 for issues in compliance_issues.values() if issues)
+        conflict_count = len(conflict_analysis.get("conflicts", []))
+        
+        if high_risk_issues > 3 or conflict_count > 2:
+            overall_risk = "high"
+        elif high_risk_issues > 1 or conflict_count > 0:
+            overall_risk = "medium"
+        else:
+            overall_risk = "low"
+        
+        return {
+            "overall_risk": overall_risk,
+            "compliance_issues": compliance_issues,
+            "conflict_analysis": conflict_analysis,
+            "university_limitations": research_results.get("university_limitations", []),
+            "industry_limitations": research_results.get("industry_limitations", [])
+        }
+    
+    def _detect_anomalies(self, text: str) -> Dict[str, Any]:
+        """Detect various types of anomalies in the contract text."""
+        
+        anomalies = {
+            "statistical_anomalies": [],
+            "structural_anomalies": [],
+            "linguistic_anomalies": [],
+            "format_anomalies": []
+        }
+        
+        # Statistical anomalies
+        word_freq = Counter(re.findall(r'\b\w+\b', text.lower()))
+        total_words = sum(word_freq.values())
+        
+        # Check for unusual word frequencies
+        for word, freq in word_freq.most_common(10):
+            if freq / total_words > 0.05 and word not in ['the', 'and', 'or', 'of', 'to', 'in', 'for']:
+                anomalies["statistical_anomalies"].append({
+                    "type": "unusual_word_frequency",
+                    "word": word,
+                    "frequency": freq,
+                    "percentage": (freq / total_words) * 100
+                })
+        
+        # Structural anomalies
+        lines = text.split('\n')
+        line_lengths = [len(line) for line in lines]
+        avg_line_length = np.mean(line_lengths)
+        
+        # Check for unusually long or short lines
+        for i, length in enumerate(line_lengths):
+            if length > avg_line_length * 3:
+                anomalies["structural_anomalies"].append({
+                    "type": "unusually_long_line",
+                    "line_number": i + 1,
+                    "length": length,
+                    "content_preview": lines[i][:100] + "..." if len(lines[i]) > 100 else lines[i]
+                })
+        
+        # Format anomalies (unusual characters, encoding issues)
+        unusual_chars = re.findall(r'[^\x00-\x7F]', text)  # Non-ASCII characters
+        if unusual_chars:
+            char_freq = Counter(unusual_chars)
+            anomalies["format_anomalies"].append({
+                "type": "non_ascii_characters",
+                "characters": dict(char_freq.most_common(5)),
+                "total_count": len(unusual_chars)
+            })
+        
+        return anomalies
+    
+    def _calculate_risk_scores(self, results: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate overall risk scores based on all analysis results."""
+        
+        scores = {
+            "overall_risk_score": 0,
+            "compliance_risk_score": 0,
+            "hidden_risk_score": 0,
+            "complexity_score": 0,
+            "recommendation_priority": "low"
+        }
+        
+        # Compliance risk score
+        compliance_analysis = results.get("compliance_analysis", {})
+        if compliance_analysis.get("overall_risk") == "high":
+            scores["compliance_risk_score"] = 0.8
+        elif compliance_analysis.get("overall_risk") == "medium":
+            scores["compliance_risk_score"] = 0.5
+        else:
+            scores["compliance_risk_score"] = 0.2
+        
+        # Hidden risk score based on pattern analysis
+        pattern_analysis = results.get("pattern_analysis", {})
+        hidden_risks = pattern_analysis.get("hidden_risks", {})
+        
+        high_risk_count = 0
+        total_risk_count = 0
+        
+        for risk_type, instances in hidden_risks.items():
+            for instance in instances:
+                total_risk_count += 1
+                if instance.get("risk_level") == "high":
+                    high_risk_count += 1
+        
+        if total_risk_count > 0:
+            scores["hidden_risk_score"] = min(1.0, (high_risk_count * 0.3 + total_risk_count * 0.1))
+        else:
+            scores["hidden_risk_score"] = 0.0
+        
+        # Complexity score
+        entropy_analysis = results.get("entropy_analysis", {})
+        complexity_score = entropy_analysis.get("complexity_score", 0)
+        scores["complexity_score"] = min(1.0, complexity_score / 10.0)  # Normalize to 0-1
+        
+        # Overall risk score (weighted average)
+        scores["overall_risk_score"] = (
+            scores["compliance_risk_score"] * 0.4 +
+            scores["hidden_risk_score"] * 0.4 +
+            scores["complexity_score"] * 0.2
+        )
+        
+        # Recommendation priority
+        if scores["overall_risk_score"] > 0.7:
+            scores["recommendation_priority"] = "critical"
+        elif scores["overall_risk_score"] > 0.5:
+            scores["recommendation_priority"] = "high"
+        elif scores["overall_risk_score"] > 0.3:
+            scores["recommendation_priority"] = "medium"
+        else:
+            scores["recommendation_priority"] = "low"
+        
+        return scores
+    
+    def _generate_advanced_recommendations(self, results: Dict[str, Any], contract_type: str) -> List[Dict[str, Any]]:
+        """Generate actionable recommendations based on analysis results."""
+        
+        recommendations = []
+        risk_scores = results.get("risk_scoring", {})
+        pattern_analysis = results.get("pattern_analysis", {})
+        compliance_analysis = results.get("compliance_analysis", {})
+        
+        # Critical compliance issues
+        if compliance_analysis.get("overall_risk") == "high":
+            recommendations.append({
+                "priority": "critical",
+                "category": "compliance",
+                "title": "Critical Compliance Issues Detected",
+                "description": "Multiple compliance risks identified that could result in contract termination or legal issues.",
+                "action_items": [
+                    "Review all missing FAR clauses and determine applicability",
+                    "Consult with legal counsel before proceeding",
+                    "Request contract modifications for high-risk clauses"
+                ]
+            })
+        
+        # Hidden risk patterns
+        hidden_risks = pattern_analysis.get("hidden_risks", {})
+        for risk_type, instances in hidden_risks.items():
+            high_risk_instances = [i for i in instances if i.get("risk_level") == "high"]
+            if high_risk_instances:
+                recommendations.append({
+                    "priority": "high",
+                    "category": "hidden_risks",
+                    "title": f"High-Risk {risk_type.replace('_', ' ').title()} Clauses",
+                    "description": f"Found {len(high_risk_instances)} high-risk instances of {risk_type} clauses.",
+                    "action_items": [
+                        "Review flagged clauses with legal team",
+                        "Negotiate modifications to reduce risk exposure",
+                        "Consider alternative contract structures"
+                    ],
+                    "affected_clauses": [instance["matched_text"] for instance in high_risk_instances[:3]]
+                })
+        
+        # Complexity and readability issues
+        entropy_analysis = results.get("entropy_analysis", {})
+        if entropy_analysis.get("complexity_score", 0) > 7:
+            recommendations.append({
+                "priority": "medium",
+                "category": "readability",
+                "title": "High Contract Complexity",
+                "description": "Contract language is unusually complex, which may lead to interpretation issues.",
+                "action_items": [
+                    "Request plain language revisions for critical sections",
+                    "Ensure all stakeholders understand key obligations",
+                    "Consider creating a summary document for key terms"
+                ]
+            })
+        
+        # Anomaly-based recommendations
+        anomalies = results.get("anomaly_detection", {})
+        total_anomalies = sum(len(anom_list) for anom_list in anomalies.values())
+        
+        if total_anomalies > 5:
+            recommendations.append({
+                "priority": "medium",
+                "category": "document_integrity",
+                "title": "Multiple Document Anomalies Detected",
+                "description": f"Found {total_anomalies} potential document anomalies that may indicate drafting issues.",
+                "action_items": [
+                    "Verify document integrity and formatting",
+                    "Check for potential hidden or modified text",
+                    "Request clean version of contract if needed"
+                ]
+            })
+        
+        # Contract type specific recommendations
+        if contract_type == "academic":
+            self._add_academic_recommendations(recommendations, results)
+        elif contract_type in ["government", "federal"]:
+            self._add_federal_recommendations(recommendations, results)
+        
+        # Sort by priority
+        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        recommendations.sort(key=lambda x: priority_order.get(x["priority"], 3))
+        
+        return recommendations
+    
+    def _add_academic_recommendations(self, recommendations: List[Dict[str, Any]], results: Dict[str, Any
