@@ -1,0 +1,620 @@
+﻿// server.js - Rektify Production Backend
+const express = require('express');
+const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const compression = require('compression');
+require('dotenv').config();
+
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+
+// Security middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            scriptSrc: ["'self'", "'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            connectSrc: ["'self'", "https://generativelanguage.googleapis.com"]
+        }
+    }
+}));
+
+
+app.use(compression());
+
+
+// CORS configuration
+app.use(cors({
+    origin: [
+        'https://rektify.lol',
+        'https://www.rektify.lol',
+        'https://rektify.vercel.app',
+        'http://localhost:3000',
+        'http://localhost:5000',
+        'http://127.0.0.1:5500' // For local development
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key']
+}));
+
+
+// Rate limiting configurations
+const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // 100 requests per 15 minutes
+    message: {
+        error: 'Too many requests from this IP, please try again later.',
+        retryAfter: '15 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+
+const aiLimiter = rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 5, // 5 AI requests per minute
+    message: {
+        error: 'AI rate limit exceeded. Please wait before making another request.',
+        retryAfter: '1 minute'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+
+const memeHeavyLimiter = rateLimit({
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 3, // 3 meme generations per 5 minutes (they're expensive)
+    message: {
+        error: 'Meme generation limit exceeded. Please wait 5 minutes.',
+        retryAfter: '5 minutes'
+    },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+
+app.use(generalLimiter);
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+
+// Analytics and metrics storage
+let analytics = {
+    totalDiagnoses: 0,
+    totalMemes: 0,
+    uniqueUsers: new Set(),
+    dailyStats: {},
+    errors: [],
+    uptime: Date.now()
+};
+
+
+// Founding Degens storage (in production, use a database)
+let foundingDegens = new Set();
+let foundingDegenDetails = [];
+
+
+// Utility functions
+function trackAnalytics(type, ip, userAgent = '') {
+    const today = new Date().toDateString();
+    if (!analytics.dailyStats[today]) {
+        analytics.dailyStats[today] = { 
+            diagnoses: 0, 
+            memes: 0, 
+            users: new Set(),
+            errors: 0
+        };
+    }
+    
+    analytics.uniqueUsers.add(ip);
+    analytics.dailyStats[today].users.add(ip);
+    
+    if (type === 'diagnosis') {
+        analytics.totalDiagnoses++;
+        analytics.dailyStats[today].diagnoses++;
+    } else if (type === 'meme') {
+        analytics.totalMemes++;
+        analytics.dailyStats[today].memes++;
+    } else if (type === 'error') {
+        analytics.dailyStats[today].errors++;
+    }
+}
+
+
+function logError(error, context = '') {
+    const errorLog = {
+        timestamp: new Date().toISOString(),
+        error: error.message,
+        stack: error.stack,
+        context
+    };
+    
+    analytics.errors.push(errorLog);
+    
+    // Keep only last 100 errors
+    if (analytics.errors.length > 100) {
+        analytics.errors = analytics.errors.slice(-100);
+    }
+    
+    console.error(`[${errorLog.timestamp}] ${context}: ${error.message}`);
+}
+
+
+function getClientInfo(req) {
+    return {
+        ip: req.ip || req.connection.remoteAddress || 'unknown',
+        userAgent: req.get('User-Agent') || 'unknown',
+        timestamp: new Date().toISOString()
+    };
+}
+
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    const uptime = Date.now() - analytics.uptime;
+    res.json({ 
+        status: 'healthy', 
+        timestamp: new Date().toISOString(),
+        uptime: `${Math.floor(uptime / 1000)} seconds`,
+        version: '1.0.0'
+    });
+});
+
+
+// Status endpoint with basic metrics
+app.get('/api/status', (req, res) => {
+    const today = new Date().toDateString();
+    const todayStats = analytics.dailyStats[today] || { diagnoses: 0, memes: 0, users: new Set() };
+    
+    res.json({
+        status: 'operational',
+        stats: {
+            totalDiagnoses: analytics.totalDiagnoses,
+            totalMemes: analytics.totalMemes,
+            todayDiagnoses: todayStats.diagnoses,
+            todayMemes: todayStats.memes,
+            foundingDegens: foundingDegens.size,
+            foundingDegensRemaining: Math.max(0, 13 - foundingDegens.size)
+        },
+        uptime: Date.now() - analytics.uptime
+    });
+});
+
+
+// AI Therapy Analysis Endpoint
+app.post('/api/analyze', aiLimiter, async (req, res) => {
+    const clientInfo = getClientInfo(req);
+    
+    try {
+        const { prompt } = req.body;
+        
+        // Input validation
+        if (!prompt || typeof prompt !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide a description of your trading pain.'
+            });
+        }
+
+
+        const cleanPrompt = prompt.trim();
+        
+        if (cleanPrompt.length < 10) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide more detail (at least 10 characters) for a better analysis.'
+            });
+        }
+
+
+        if (cleanPrompt.length > 1000) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please keep your description under 1000 characters.'
+            });
+        }
+
+
+        // Check for API key
+        if (!process.env.GEMINI_API_KEY) {
+            throw new Error('API configuration missing');
+        }
+
+
+        // Enhanced prompt for better AI responses
+        const systemPrompt = `You are Rektify, an AI crypto trading therapist. You're knowledgeable, supportive, and have a subtle sense of humor while providing genuine mental health guidance for crypto traders.
+
+
+Analyze this trading situation and provide therapy:
+"${cleanPrompt}"
+
+
+Respond ONLY with valid JSON in this exact format:
+{
+    "diagnosis": "2-3 word catchy diagnosis (e.g., 'FOMO Fever', 'Diamond Hand Anxiety', 'Paper Hand Syndrome')",
+    "severity": "Low Rekt|Medium Rekt|High Rekt",
+    "therapyTip": "Supportive, practical advice (60-120 words). Include actionable steps and genuine empathy. Use some crypto terminology but focus on mental wellness.",
+    "playlist": ["Song Title 1 - Artist", "Song Title 2 - Artist", "Song Title 3 - Artist"]
+}
+
+
+Make the playlist songs real, calming/motivational tracks that relate to emotions or resilience. Keep diagnosis creative but professional. Therapy tip should be genuinely helpful.`;
+
+
+        // Gemini API call
+        const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+            {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Rektify/1.0'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        role: "user",
+                        parts: [{ text: systemPrompt }]
+                    }],
+                    generationConfig: {
+                        temperature: 0.8,
+                        topK: 40,
+                        topP: 0.95,
+                        maxOutputTokens: 1024,
+                        responseMimeType: "application/json"
+                    },
+                    safetySettings: [
+                        {
+                            category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                            threshold: "BLOCK_MEDIUM_AND_ABOVE"
+                        }
+                    ]
+                })
+            }
+        );
+
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Gemini API error ${response.status}: ${errorText}`);
+        }
+
+
+        const result = await response.json();
+        
+        if (!result.candidates?.[0]?.content?.parts?.[0]?.text) {
+            throw new Error('Invalid response structure from AI');
+        }
+
+
+        let analysisData;
+        try {
+            analysisData = JSON.parse(result.candidates[0].content.parts[0].text);
+        } catch (parseError) {
+            throw new Error('AI returned invalid JSON format');
+        }
+
+
+        // Validate response structure
+        const requiredFields = ['diagnosis', 'severity', 'therapyTip', 'playlist'];
+        for (const field of requiredFields) {
+            if (!analysisData[field]) {
+                throw new Error(`Missing ${field} in AI response`);
+            }
+        }
+
+
+        if (!Array.isArray(analysisData.playlist) || analysisData.playlist.length !== 3) {
+            throw new Error('Invalid playlist format');
+        }
+
+
+        // Track analytics
+        trackAnalytics('diagnosis', clientInfo.ip, clientInfo.userAgent);
+
+
+        res.json({
+            success: true,
+            analysis: analysisData,
+            sessionId: Date.now().toString(36) + Math.random().toString(36).substr(2),
+            timestamp: new Date().toISOString()
+        });
+
+
+    } catch (error) {
+        logError(error, 'AI Analysis');
+        trackAnalytics('error', clientInfo.ip);
+        
+        // Provide helpful fallback responses
+        const fallbackResponses = [
+            {
+                diagnosis: "Server Overwhelm",
+                severity: "Medium Rekt",
+                therapyTip: "Our AI therapist is currently processing a lot of rekt souls (probably analyzing the entire crypto market at once). While we get back online, remember: every red candle is temporary, every portfolio dip is a lesson. Take a deep breath, step away from the charts for 10 minutes, and remember why you started this journey. You're more resilient than your current P&L suggests. 💪",
+                playlist: ["Hold On - Wilson Phillips", "Stronger (What Doesn't Kill You) - Kelly Clarkson", "Don't Stop Believin' - Journey"]
+            },
+            {
+                diagnosis: "Technical Turbulence",
+                severity: "Low Rekt",
+                therapyTip: "Even our AI gets emotional about market movements sometimes! While we troubleshoot, here's some free therapy: the best trades come from a calm, rational mind. Consider this forced break a gift - use it to reassess your strategy, practice some deep breathing, or just remind yourself that you're playing a long-term game. Markets are temporary, but your growth mindset is permanent. 🧘‍♂️",
+                playlist: ["Breathe Me - Sia", "Weightless - Marconi Union", "Clair de Lune - Claude Debussy"]
+            }
+        ];
+        
+        const fallback = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+        
+        res.status(503).json({
+            success: false,
+            error: 'AI temporarily unavailable - but we still got you!',
+            fallback: fallback,
+            retryAfter: 60
+        });
+    }
+});
+
+
+// Meme Generation Endpoint
+app.post('/api/generate-meme', memeHeavyLimiter, async (req, res) => {
+    const clientInfo = getClientInfo(req);
+    
+    try {
+        const { prompt } = req.body;
+        
+        // Input validation
+        if (!prompt || typeof prompt !== 'string') {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide a description for your meme.'
+            });
+        }
+
+
+        const cleanPrompt = prompt.trim();
+        
+        if (cleanPrompt.length < 5) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please provide more detail (at least 5 characters) for your meme.'
+            });
+        }
+
+
+        if (cleanPrompt.length > 500) {
+            return res.status(400).json({
+                success: false,
+                error: 'Please keep your meme description under 500 characters.'
+            });
+        }
+
+
+        // Enhanced prompt for better meme generation
+        const enhancedPrompt = `Create a humorous cryptocurrency/trading meme: ${cleanPrompt}. 
+
+
+Style requirements:
+- Internet meme format (classic meme template style)
+- Clean, readable text overlay
+- Crypto/trading theme
+- Funny but not offensive
+- High contrast text that's easy to read
+- Professional quality but meme aesthetic
+
+
+Visual style: Digital art, clean composition, meme-worthy, crypto trading humor`;
+
+
+        // Note: Imagen API integration would go here
+        // For now, we'll return a placeholder response since the actual Imagen API
+        // requires specific Google Cloud setup and billing
+        
+        // Simulate API delay
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+
+        // Track analytics
+        trackAnalytics('meme', clientInfo.ip, clientInfo.userAgent);
+
+
+        // For demo purposes, return a success response
+        // In production, replace this with actual Imagen API call
+        res.json({
+            success: false,
+            error: 'Meme generation coming soon!',
+            message: 'Our degen meme generator is being fine-tuned by our team of professional meme lords. Check back soon for fresh, crispy memes! 🎨',
+            estimatedLaunch: 'Q1 2025'
+        });
+
+
+    } catch (error) {
+        logError(error, 'Meme Generation');
+        trackAnalytics('error', clientInfo.ip);
+        
+        res.status(503).json({
+            success: false,
+            error: 'Meme generator temporarily unavailable',
+            suggestion: 'Try again in a few minutes, or create your own meme while you wait! 😄'
+        });
+    }
+});
+
+
+// Founding Degen tracking
+app.post('/api/founding-degen', (req, res) => {
+    const clientInfo = getClientInfo(req);
+    
+    try {
+        if (foundingDegens.size >= 13) {
+            return res.json({
+                success: false,
+                message: 'Founding Degen spots are full! You are an honorary member though. 🎖️',
+                totalMembers: foundingDegens.size
+            });
+        }
+        
+        if (foundingDegens.has(clientInfo.ip)) {
+            const position = Array.from(foundingDegens).indexOf(clientInfo.ip) + 1;
+            return res.json({
+                success: true,
+                message: `You are already Founding Degen #${position}! 🏆`,
+                position: position,
+                totalMembers: foundingDegens.size
+            });
+        }
+        
+        foundingDegens.add(clientInfo.ip);
+        const position = foundingDegens.size;
+        
+        // Store additional details
+        foundingDegenDetails.push({
+            ip: clientInfo.ip,
+            position: position,
+            timestamp: clientInfo.timestamp,
+            userAgent: clientInfo.userAgent
+        });
+        
+        res.json({
+            success: true,
+            message: `🎉 Congratulations! You are Founding Degen #${position}!`,
+            position: position,
+            remaining: 13 - position,
+            totalMembers: foundingDegens.size,
+            badge: `founding-degen-${position}`,
+            perks: [
+                'Exclusive Founding Degen badge',
+                'Priority access to new features',
+                'Lifetime therapy sessions',
+                'Meme generation credits'
+            ]
+        });
+        
+    } catch (error) {
+        logError(error, 'Founding Degen Tracking');
+        res.status(500).json({
+            success: false,
+            error: 'Failed to process founding degen status'
+        });
+    }
+});
+
+
+app.get('/api/founding-degens', (req, res) => {
+    res.json({
+        total: foundingDegens.size,
+        remaining: Math.max(0, 13 - foundingDegens.size),
+        isFull: foundingDegens.size >= 13,
+        positions: Array.from(foundingDegens).map((ip, index) => ({
+            position: index + 1,
+            timestamp: foundingDegenDetails[index]?.timestamp || null
+        }))
+    });
+});
+
+
+// Analytics endpoint (protected)
+app.get('/api/analytics', (req, res) => {
+    const adminKey = req.headers['x-admin-key'];
+    
+    if (!adminKey || adminKey !== process.env.ADMIN_KEY) {
+        return res.status(401).json({ 
+            error: 'Unauthorized',
+            message: 'Admin access required'
+        });
+    }
+
+
+    // Clean up old daily stats (keep last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    Object.keys(analytics.dailyStats).forEach(date => {
+        if (new Date(date) < thirtyDaysAgo) {
+            delete analytics.dailyStats[date];
+        }
+    });
+
+
+    res.json({
+        overview: {
+            totalDiagnoses: analytics.totalDiagnoses,
+            totalMemes: analytics.totalMemes,
+            totalUniqueUsers: analytics.uniqueUsers.size,
+            foundingDegens: foundingDegens.size,
+            uptime: Date.now() - analytics.uptime
+        },
+        dailyStats: Object.keys(analytics.dailyStats).map(date => ({
+            date,
+            diagnoses: analytics.dailyStats[date].diagnoses,
+            memes: analytics.dailyStats[date].memes,
+            uniqueUsers: analytics.dailyStats[date].users.size,
+            errors: analytics.dailyStats[date].errors || 0
+        })),
+        recentErrors: analytics.errors.slice(-10),
+        foundingDegensDetails: foundingDegenDetails.map(fd => ({
+            position: fd.position,
+            timestamp: fd.timestamp
+        }))
+    });
+});
+
+
+// Error handling middleware
+app.use((error, req, res, next) => {
+    logError(error, 'Express Error Handler');
+    
+    res.status(500).json({
+        success: false,
+        error: 'Internal server error',
+        message: 'Something went wrong on our end. Please try again.',
+        timestamp: new Date().toISOString()
+    });
+});
+
+
+// 404 handler
+app.use((req, res) => {
+    res.status(404).json({
+        success: false,
+        error: 'Not found',
+        message: 'This endpoint does not exist.',
+        availableEndpoints: [
+            'GET /health',
+            'GET /api/status', 
+            'POST /api/analyze',
+            'POST /api/generate-meme',
+            'POST /api/founding-degen',
+            'GET /api/founding-degens'
+        ]
+    });
+});
+
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully');
+    process.exit(0);
+});
+
+
+process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully');
+    process.exit(0);
+});
+
+
+app.listen(PORT, () => {
+    console.log(`🚀 Rektify backend running on port ${PORT}`);
+    console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+    console.log(`📊 Status: http://localhost:${PORT}/api/status`);
+    console.log(`🔥 Ready to help degens recover from their rekt! 💪`);
+});
+
+
+module.exports = app;

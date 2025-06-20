@@ -1,0 +1,42 @@
+﻿The files you provided appear to be the backend and frontend code for a web application called "Rektify: Therapy for Degens."
+server.js - Rektify Production Backend.txt: This file contains the backend code for the Rektify application, written in Node.js using the Express framework. It handles:
+* Security: Uses helmet for various HTTP headers and cors for Cross-Origin Resource Sharing.
+* Rate Limiting: Implements rate limiting for general requests, AI analysis requests, and meme generation requests.
+* Analytics: Tracks total diagnoses, memes generated, unique users, daily statistics, and errors.
+* API Endpoints:
+   * /health: A health check endpoint.
+   * /api/status: Provides operational status and basic metrics.
+   * /api/analyze: An AI therapy analysis endpoint that takes a trading "pain" prompt, validates it, and uses the Gemini API (specifically gemini-1.5-flash) to generate a diagnosis, severity, therapy tip, and a playlist. It includes robust error handling and fallback responses.
+   * /api/generate-meme: A meme generation endpoint that accepts a prompt. It is currently set up to return a placeholder message but includes the logic for integrating with the Imagen API (imagen-3.0-generate-002) for image generation.
+   * /api/founding-degen: Tracks "Founding Degens" (up to 13 spots) based on IP address.
+   * /api/founding-degens: Retrieves information about Founding Degens.
+   * /api/analytics: A protected endpoint to view detailed analytics and error logs.
+* Error Handling: Global error handling middleware and a 404 handler.
+* Graceful Shutdown: Handles SIGTERM and SIGINT signals for graceful application shutdown.
+Rektify_ Therapy for Degens.txt: This file contains the frontend HTML, CSS, and JavaScript for the Rektify web application. It features:
+* Meta Information: Includes meta tags for responsiveness, title, description, and Open Graph/Twitter card for social sharing.
+* Styling (CSS): Uses the 'Space Grotesk' font and incorporates a modern, dark theme with:
+   * Animated gradient background, floating particles, and a grid overlay for visual flair.
+   * Responsive header with a "glass" effect and a scroll-triggered transformation.
+   * Gradient text and button styling with hover effects and ripple animations.
+   * Responsive design for various screen sizes (mobile, tablet, desktop).
+* Structure (HTML):
+   * A header with a logo and navigation links (including a mobile menu toggle).
+   * A hero section with a title, subtitle, description, and call-to-action buttons.
+   * A statistics section with animated counters.
+   * A features section highlighting AI-powered insights, personalized therapy, and market sentiment analysis.
+   * A "Demo" section for the AI Therapy, where users can input their trading pain and receive a diagnosis, severity, therapy tip, and a personalized playlist.
+   * A "Degen Meme Generator" section where users can input a prompt to generate a meme.
+   * A footer with links and copyright information.
+* Interactivity (JavaScript):
+   * Custom showMessageBox function for alerts instead of native browser alert().
+   * typeWriterEffect for animating text content.
+   * Header scroll effect.
+   * Mobile navigation menu toggle.
+   * Dynamic particle generation for background animation.
+   * Intersection Observer for animating stat numbers when they become visible.
+   * Client-side logic for interacting with the backend API endpoints:
+      * AI Therapy: Sends user input to /api/analyze and displays the diagnosis, severity, therapy tip, and playlist with typewriter animation. It directly calls the Gemini API (client-side in this example) for demonstration.
+      * Meme Generation: Sends user input to /api/generate-meme and displays the generated image (or a placeholder/error message). It directly calls the Imagen API (client-side in this example) for demonstration.
+* External Resources: Links to Google Fonts and Font Awesome for icons.
+In summary, these two files represent a complete, functional web application focused on providing AI-driven emotional support and entertainment for cryptocurrency traders, packaged as "Rektify: Therapy for Degens."
