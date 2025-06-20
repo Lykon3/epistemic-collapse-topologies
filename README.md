@@ -1,5 +1,7 @@
 ![Banner](./banner.png)
 
+![Banner](./banner2.jpg)
+
 Why an Electrician Is Writing About Epistemic Sovereignty
 
 I fix things that hum under voltage. Systems that carry current, fail under stress, demand groundedness—literal and otherwise. So when the world started feeling like it was shorting out epistemically—truth flickering, institutions sizzling, ideological circuits overloaded—I didn’t reach for a philosophy textbook. I reached for a continuity tester.
