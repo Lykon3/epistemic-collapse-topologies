@@ -1,0 +1,9 @@
+{
+  "name": "narrative-lab",
+  "version": "1.0.0",
+  "description": "Live prototypes and visualization tools for narrative and epistemic modeling.",
+  "scripts": {
+    "vercel-build": "echo 'Static build - no build step required.'"
+  },
+  "license": "MIT"
+}
