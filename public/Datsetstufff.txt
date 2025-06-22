@@ -1,0 +1,502 @@
+﻿import React, { useState, useEffect } from 'react';
+import { BarChart, Bar, Cell, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, Legend, XAxis, YAxis, CartesianGrid, LineChart, Line, ScatterChart, Scatter } from 'recharts';
+import { Brain, Database, Download, Filter, Upload, Plus, Eye, Target, GitBranch, Zap } from 'lucide-react';
+
+
+const EnhancedKompromatDataset = () => {
+  const [activeTab, setActiveTab] = useState('dataset');
+  const [selectedBloc, setSelectedBloc] = useState('all');
+  const [filterEvent, setFilterEvent] = useState('all');
+  const [sortBy, setSortBy] = useState('kri_total');
+  const [newEntry, setNewEntry] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+
+
+  // Extended Dataset with additional entries
+  const narrativeDataset = [
+    // January 6th Event - Multi-perspective analysis
+    {
+      "id": "j6_maga_1", "source_name": "Breitbart", "bloc_alignment": "MAGA", "event_date": "2021-01-06",
+      "headline": "Patriots Rally Against a Rigged System", 
+      "summary": "Protesters gather in D.C. to voice outrage over a stolen election.",
+      "narrative_frame": "Populist uprising against elite fraud", 
+      "semantic_injection_score": 0.82, "sentiment_polarity": -0.76,
+      "archetype_shift_tags": ["Whistleblower→Insurrectionist", "Martyrization of Protesters"], 
+      "source_laundering_flags": ["Hyperpartisan recursion", "Selective eyewitness citation"],
+      "kri_vector": { "semantic_drift": 0.73, "sentiment_inversion": 0.79, "archetype_incoherence": 0.68, "temporal_synchrony": 0.45 },
+      "event_category": "january_6th", "kri_total": 0.663
+    },
+    {
+      "id": "j6_mainstream_1", "source_name": "CNN", "bloc_alignment": "Liberal", "event_date": "2021-01-06",
+      "headline": "Violent Mob Storms Capitol in Unprecedented Attack on Democracy", 
+      "summary": "Pro-Trump rioters breach Capitol security, forcing evacuation of Congress.",
+      "narrative_frame": "Insurrection against democratic institutions", 
+      "semantic_injection_score": 0.67, "sentiment_polarity": -0.89,
+      "archetype_shift_tags": ["Protesters→Terrorists", "Trump→Authoritarian"], 
+      "source_laundering_flags": ["Expert consensus manufacturing"],
+      "kri_vector": { "semantic_drift": 0.58, "sentiment_inversion": 0.71, "archetype_incoherence": 0.52, "temporal_synchrony": 0.38 },
+      "event_category": "january_6th", "kri_total": 0.548
+    },
+    {
+      "id": "j6_neutral_1", "source_name": "Associated Press", "bloc_alignment": "Neutral", "event_date": "2021-01-06",
+      "headline": "Congress Evacuated as Protesters Enter Capitol Building", 
+      "summary": "Electoral certification disrupted as crowds breach Capitol security perimeter.",
+      "narrative_frame": "Breaking news coverage of security breach", 
+      "semantic_injection_score": 0.18, "sentiment_polarity": -0.12,
+      "archetype_shift_tags": [], "source_laundering_flags": [],
+      "kri_vector": { "semantic_drift": 0.23, "sentiment_inversion": 0.15, "archetype_incoherence": 0.08, "temporal_synchrony": 0.21 },
+      "event_category": "january_6th", "kri_total": 0.168
+    },
+    // Ukraine Conflict - Multi-perspective analysis
+    {
+      "id": "ukraine_kremlin_1", "source_name": "RT", "bloc_alignment": "Kremlin", "event_date": "2022-02-24",
+      "headline": "Special Operation Aims to De-Nazify Ukraine", 
+      "summary": "Russian forces initiate military operations, citing protection of Russian-speaking populations.",
+      "narrative_frame": "Defensive intervention against Western-backed extremism", 
+      "semantic_injection_score": 0.87, "sentiment_polarity": 0.34,
+      "archetype_shift_tags": ["Protector→Peacekeeper", "Ukrainians→Nazi proxies"], 
+      "source_laundering_flags": ["Citing fringe Western analysts", "Echo amplification from Telegram"],
+      "kri_vector": { "semantic_drift": 0.92, "sentiment_inversion": 0.81, "archetype_incoherence": 0.77, "temporal_synchrony": 0.59 },
+      "event_category": "ukraine_conflict", "kri_total": 0.773
+    },
+    {
+      "id": "ukraine_western_1", "source_name": "BBC", "bloc_alignment": "Western", "event_date": "2022-02-24",
+      "headline": "Russia Launches Full-Scale Invasion of Ukraine", 
+      "summary": "Russian forces attack multiple Ukrainian cities in an unprovoked act of aggression.",
+      "narrative_frame": "Illegal aggression against sovereign democracy", 
+      "semantic_injection_score": 0.61, "sentiment_polarity": -0.78,
+      "archetype_shift_tags": ["Putin→War Criminal", "Ukraine→Democratic Martyr"], 
+      "source_laundering_flags": ["NATO source prioritization"],
+      "kri_vector": { "semantic_drift": 0.54, "sentiment_inversion": 0.67, "archetype_incoherence": 0.43, "temporal_synchrony": 0.31 },
+      "event_category": "ukraine_conflict", "kri_total": 0.488
+    },
+    {
+      "id": "ukraine_neutral_1", "source_name": "Reuters", "bloc_alignment": "Neutral", "event_date": "2022-02-24",
+      "headline": "Russia Launches Attacks Across Ukraine", 
+      "summary": "Explosions reported in multiple Ukrainian cities following Putin's announcement.",
+      "narrative_frame": "Breaking news coverage of international conflict", 
+      "semantic_injection_score": 0.12, "sentiment_polarity": -0.05,
+      "archetype_shift_tags": [], "source_laundering_flags": [],
+      "kri_vector": { "semantic_drift": 0.21, "sentiment_inversion": 0.11, "archetype_incoherence": 0.05, "temporal_synchrony": 0.18 },
+      "event_category": "ukraine_conflict", "kri_total": 0.138
+    },
+    // COVID Origins - Multi-perspective analysis
+    {
+      "id": "covid_maga_1", "source_name": "Fox News", "bloc_alignment": "MAGA", "event_date": "2021-05-26",
+      "headline": "Biden Admin Finally Admits Lab Leak Theory Credible", 
+      "summary": "Intelligence community ordered to investigate Wuhan lab origins after dismissing theory.",
+      "narrative_frame": "Vindication of suppressed truth against establishment denial", 
+      "semantic_injection_score": 0.74, "sentiment_polarity": 0.68,
+      "archetype_shift_tags": ["Conspiracy theorists→Truth tellers", "Scientists→Deep state agents"], 
+      "source_laundering_flags": ["Tucker Carlson amplification", "Selective intelligence leaks"],
+      "kri_vector": { "semantic_drift": 0.69, "sentiment_inversion": 0.72, "archetype_incoherence": 0.61, "temporal_synchrony": 0.43 },
+      "event_category": "covid_origins", "kri_total": 0.613
+    },
+    {
+      "id": "covid_kremlin_1", "source_name": "Sputnik", "bloc_alignment": "Kremlin", "event_date": "2021-05-26",
+      "headline": "US Bioweapons Program Exposed Through Wuhan Investigation", 
+      "summary": "American military biological research facilities under scrutiny as lab leak theory gains credibility.",
+      "narrative_frame": "US biological warfare program exposure", 
+      "semantic_injection_score": 0.91, "sentiment_polarity": -0.82,
+      "archetype_shift_tags": ["US researchers→Bioweapons developers", "China→Victim of US program"], 
+      "source_laundering_flags": ["Chinese state media echo", "Fringe Western source citation"],
+      "kri_vector": { "semantic_drift": 0.89, "sentiment_inversion": 0.84, "archetype_incoherence": 0.78, "temporal_synchrony": 0.52 },
+      "event_category": "covid_origins", "kri_total": 0.758
+    },
+    {
+      "id": "covid_liberal_1", "source_name": "Washington Post", "bloc_alignment": "Liberal", "event_date": "2021-05-26",
+      "headline": "Biden Orders Intelligence Review of COVID-19 Origins", 
+      "summary": "President directs 90-day investigation into virus origins after inconclusive assessment.",
+      "narrative_frame": "Responsible scientific investigation of pandemic origins", 
+      "semantic_injection_score": 0.34, "sentiment_polarity": 0.12,
+      "archetype_shift_tags": ["Lab leak theorists→Potentially legitimate"], 
+      "source_laundering_flags": ["Scientific establishment deference"],
+      "kri_vector": { "semantic_drift": 0.31, "sentiment_inversion": 0.28, "archetype_incoherence": 0.24, "temporal_synchrony": 0.19 },
+      "event_category": "covid_origins", "kri_total": 0.255
+    },
+    // Taiwan Tensions
+    {
+      "id": "taiwan_kremlin_1", "source_name": "CGTN", "bloc_alignment": "Kremlin", "event_date": "2022-08-02",
+      "headline": "Taiwan Reunification Inevitable as US Provocations Escalate", 
+      "summary": "Chinese military exercises demonstrate resolve following Pelosi visit.",
+      "narrative_frame": "Defensive response to US imperial aggression", 
+      "semantic_injection_score": 0.83, "sentiment_polarity": 0.27,
+      "archetype_shift_tags": ["China→Defender of sovereignty", "US→Imperial aggressor"], 
+      "source_laundering_flags": ["CCP directive amplification"],
+      "kri_vector": { "semantic_drift": 0.81, "sentiment_inversion": 0.75, "archetype_incoherence": 0.69, "temporal_synchrony": 0.48 },
+      "event_category": "taiwan_tensions", "kri_total": 0.683
+    },
+    {
+      "id": "taiwan_western_1", "source_name": "Financial Times", "bloc_alignment": "Western", "event_date": "2022-08-02",
+      "headline": "China's Military Drills Threaten Taiwan Strait Stability", 
+      "summary": "Beijing's aggressive response raises concerns about cross-strait peace.",
+      "narrative_frame": "Authoritarian intimidation of democratic ally", 
+      "semantic_injection_score": 0.57, "sentiment_polarity": -0.64,
+      "archetype_shift_tags": ["China→Authoritarian threat", "Taiwan→Democratic ally"], 
+      "source_laundering_flags": ["Think tank expert consensus"],
+      "kri_vector": { "semantic_drift": 0.52, "sentiment_inversion": 0.61, "archetype_incoherence": 0.41, "temporal_synchrony": 0.29 },
+      "event_category": "taiwan_tensions", "kri_total": 0.458
+    }
+  ];
+
+
+  // Filtering and sorting logic
+  const [filteredData, setFilteredData] = useState(narrativeDataset);
+
+
+  useEffect(() => {
+    let data = narrativeDataset.filter(item => {
+      const blocMatch = selectedBloc === 'all' || item.bloc_alignment === selectedBloc;
+      const eventMatch = filterEvent === 'all' || item.event_category === filterEvent;
+      return blocMatch && eventMatch;
+    });
+
+
+    data.sort((a, b) => {
+      if (sortBy === 'kri_total') return b.kri_total - a.kri_total;
+      if (sortBy === 'semantic_injection_score') return b.semantic_injection_score - a.semantic_injection_score;
+      if (sortBy === 'date') return new Date(b.event_date) - new Date(a.event_date);
+      return 0;
+    });
+
+
+    setFilteredData(data);
+  }, [selectedBloc, filterEvent, sortBy]);
+
+
+  // Analytics calculations
+  const avgMetricsByBloc = ['MAGA', 'Kremlin', 'Liberal', 'Western', 'Neutral'].map(bloc => {
+    const articles = narrativeDataset.filter(d => d.bloc_alignment === bloc);
+    if (articles.length === 0) return null;
+    const avg = (field, vector = true) => articles.reduce((sum, a) => sum + (vector ? a.kri_vector[field] : a[field]), 0) / articles.length;
+    return {
+      bloc,
+      count: articles.length,
+      avg_kri_total: avg('kri_total', false),
+      avg_semantic_drift: avg('semantic_drift'),
+      avg_sentiment_inversion: avg('sentiment_inversion'),
+      avg_archetype_incoherence: avg('archetype_incoherence'),
+      avg_semantic_injection: avg('semantic_injection_score', false)
+    };
+  }).filter(Boolean);
+
+
+  // Export functionality
+  const handleExport = (format = 'json') => {
+    let content, filename, type;
+    
+    if (format === 'json') {
+      content = JSON.stringify(filteredData, null, 2);
+      filename = 'kompromat-dataset.json';
+      type = 'application/json';
+    } else if (format === 'csv') {
+      const headers = ['id', 'source_name', 'bloc_alignment', 'event_date', 'headline', 'summary', 'narrative_frame', 'kri_total', 'semantic_injection_score', 'sentiment_polarity'];
+      const csvContent = [
+        headers.join(','),
+        ...filteredData.map(item => headers.map(header => `"${item[header] || ''}"`).join(','))
+      ].join('\n');
+      content = csvContent;
+      filename = 'kompromat-dataset.csv';
+      type = 'text/csv';
+    } else if (format === 'llm') {
+      // LLM training format
+      const llmData = filteredData.map(item => ({
+        input: `Analyze this news headline and summary:\nHeadline: "${item.headline}"\nSummary: "${item.summary}"\nSource: ${item.source_name}`,
+        output: `Bloc Alignment: ${item.bloc_alignment}\nKRI Score: ${item.kri_total.toFixed(3)}\nNarrative Frame: ${item.narrative_frame}\nSemantic Injection: ${item.semantic_injection_score.toFixed(3)}\nArchetype Shifts: ${item.archetype_shift_tags.join(', ')}`
+      }));
+      content = JSON.stringify(llmData, null, 2);
+      filename = 'kompromat-training-data.json';
+      type = 'application/json';
+    }
+
+
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+
+  // Import functionality
+  const handleImport = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const importedData = JSON.parse(e.target.result);
+          // In a real implementation, you'd merge this with existing data
+          console.log('Imported data:', importedData);
+          alert(`Successfully imported ${importedData.length} entries`);
+        } catch (error) {
+          alert('Error parsing JSON file');
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+
+  const COLORS = {
+    MAGA: '#DC2626', Kremlin: '#7C2D12', Liberal: '#2563EB', Western: '#059669', Neutral: '#6B7280'
+  };
+
+
+  // Components
+  const DatasetEntry = ({ entry }) => (
+    <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderLeftColor: COLORS[entry.bloc_alignment] }}>
+      <div className="flex justify-between items-start mb-2">
+        <div className="flex-1">
+          <div className="flex items-center space-x-2 mb-1">
+            <span className="px-2 py-0.5 rounded-full text-xs font-semibold text-white" style={{ backgroundColor: COLORS[entry.bloc_alignment] }}>
+              {entry.bloc_alignment}
+            </span>
+            <span className="text-sm text-gray-500">{entry.source_name}</span>
+            <span className="text-sm text-gray-500">{entry.event_date}</span>
+          </div>
+          <h3 className="text-md font-bold text-gray-800 mb-1">{entry.headline}</h3>
+          <p className="text-sm text-gray-600 mb-2">{entry.summary}</p>
+          <p className="text-sm text-gray-500 italic">Frame: {entry.narrative_frame}</p>
+        </div>
+        <div className="ml-4 text-right">
+          <div className="text-xl font-bold" style={{ color: COLORS[entry.bloc_alignment] }}>
+            {entry.kri_total.toFixed(3)}
+          </div>
+          <div className="text-xs text-gray-500">KRI Score</div>
+        </div>
+      </div>
+      
+      {/* KRI Components */}
+      <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+        <div className="bg-purple-50 p-2 rounded">
+          <span className="font-semibold">SD:</span> {entry.kri_vector.semantic_drift.toFixed(3)}
+        </div>
+        <div className="bg-red-50 p-2 rounded">
+          <span className="font-semibold">SI:</span> {entry.kri_vector.sentiment_inversion.toFixed(3)}
+        </div>
+        <div className="bg-orange-50 p-2 rounded">
+          <span className="font-semibold">AI:</span> {entry.kri_vector.archetype_incoherence.toFixed(3)}
+        </div>
+        <div className="bg-green-50 p-2 rounded">
+          <span className="font-semibold">TS:</span> {entry.kri_vector.temporal_synchrony.toFixed(3)}
+        </div>
+      </div>
+
+
+      {/* Archetype Shifts */}
+      {entry.archetype_shift_tags.length > 0 && (
+        <div className="mt-2">
+          <div className="flex flex-wrap gap-1">
+            {entry.archetype_shift_tags.map((tag, idx) => (
+              <span key={idx} className="px-2 py-1 bg-purple-100 text-purple-800 text-xs rounded">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+
+  const AnalyticsPanel = () => (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg p-6 shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">KRI by Bloc</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={avgMetricsByBloc}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="bloc" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="avg_kri_total" fill="#8B5CF6" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+
+        <div className="bg-white rounded-lg p-6 shadow-lg">
+          <h3 className="text-lg font-semibold mb-4">Manipulation Profile by Bloc</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <RadarChart data={avgMetricsByBloc}>
+              <PolarGrid />
+              <PolarAngleAxis dataKey="bloc" />
+              <PolarRadiusAxis domain={[0, 1]} />
+              <Radar name="Semantic Drift" dataKey="avg_semantic_drift" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.1} />
+              <Radar name="Sentiment Inversion" dataKey="avg_sentiment_inversion" stroke="#EF4444" fill="#EF4444" fillOpacity={0.1} />
+              <Radar name="Archetype Shift" dataKey="avg_archetype_incoherence" stroke="#F59E0B" fill="#F59E0B" fillOpacity={0.1} />
+              <Legend />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+
+      <div className="bg-white rounded-lg p-6 shadow-lg">
+        <h3 className="text-lg font-semibold mb-4">Temporal KRI Analysis</h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <ScatterChart data={filteredData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="semantic_injection_score" name="Semantic Injection" />
+            <YAxis dataKey="kri_total" name="KRI Score" />
+            <Tooltip 
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="bg-white p-3 border rounded shadow">
+                      <p className="font-semibold">{data.source_name}</p>
+                      <p>KRI: {data.kri_total.toFixed(3)}</p>
+                      <p>Injection: {data.semantic_injection_score.toFixed(3)}</p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Scatter dataKey="kri_total" fill="#8B5CF6" />
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-4 font-sans">
+      <div className="max-w-6xl mx-auto">
+        <header className="bg-white rounded-lg shadow-md mb-4 p-4">
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+            <Brain className="mr-2 text-purple-600"/>
+            Enhanced Kompromat Geometry Dataset
+          </h1>
+          <p className="text-gray-600 mt-1">Interactive corpus with analytics and export capabilities</p>
+        </header>
+
+
+        <div className="bg-white rounded-lg shadow-md mb-4">
+          <div className="border-b">
+            <nav className="flex space-x-8 px-4">
+              {[
+                { id: 'dataset', label: 'Dataset', icon: Database },
+                { id: 'analytics', label: 'Analytics', icon: Target },
+                { id: 'export', label: 'Export/Import', icon: Download }
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`py-3 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === id ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500'
+                  }`}
+                >
+                  <Icon size={16} className="mr-2" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+
+          <div className="p-4">
+            {activeTab === 'dataset' && (
+              <div>
+                <div className="flex flex-wrap gap-4 items-center justify-between mb-4 pb-4 border-b">
+                  <div className="flex flex-wrap gap-4">
+                    <select value={selectedBloc} onChange={e => setSelectedBloc(e.target.value)} className="p-2 border rounded-md text-sm">
+                      <option value="all">All Blocs</option>
+                      <option value="MAGA">MAGA</option>
+                      <option value="Kremlin">Kremlin</option>
+                      <option value="Liberal">Liberal</option>
+                      <option value="Western">Western</option>
+                      <option value="Neutral">Neutral</option>
+                    </select>
+                    <select value={filterEvent} onChange={e => setFilterEvent(e.target.value)} className="p-2 border rounded-md text-sm">
+                      <option value="all">All Events</option>
+                      <option value="january_6th">January 6th</option>
+                      <option value="ukraine_conflict">Ukraine Conflict</option>
+                      <option value="covid_origins">COVID Origins</option>
+                      <option value="taiwan_tensions">Taiwan Tensions</option>
+                    </select>
+                    <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="p-2 border rounded-md text-sm">
+                      <option value="kri_total">Sort by KRI</option>
+                      <option value="semantic_injection_score">Sort by Injection</option>
+                      <option value="date">Sort by Date</option>
+                    </select>
+                  </div>
+                  <button onClick={() => handleExport('json')} className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center text-sm">
+                    <Download size={16} className="mr-2"/>
+                    Export JSON
+                  </button>
+                </div>
+                
+                <h2 className="text-lg font-semibold text-gray-800 mb-3">Dataset Entries ({filteredData.length})</h2>
+                <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-2">
+                  {filteredData.map(entry => <DatasetEntry key={entry.id} entry={entry}/>)}
+                </div>
+              </div>
+            )}
+
+
+            {activeTab === 'analytics' && <AnalyticsPanel />}
+
+
+            {activeTab === 'export' && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <button onClick={() => handleExport('json')} className="p-4 border-2 border-purple-200 rounded-lg hover:bg-purple-50 flex flex-col items-center">
+                    <Download className="text-purple-600 mb-2" size={24} />
+                    <span className="font-semibold">Export JSON</span>
+                    <span className="text-sm text-gray-600">Full dataset structure</span>
+                  </button>
+                  <button onClick={() => handleExport('csv')} className="p-4 border-2 border-green-200 rounded-lg hover:bg-green-50 flex flex-col items-center">
+                    <Download className="text-green-600 mb-2" size={24} />
+                    <span className="font-semibold">Export CSV</span>
+                    <span className="text-sm text-gray-600">Spreadsheet format</span>
+                  </button>
+                  <button onClick={() => handleExport('llm')} className="p-4 border-2 border-blue-200 rounded-lg hover:bg-blue-50 flex flex-col items-center">
+                    <Brain className="text-blue-600 mb-2" size={24} />
+                    <span className="font-semibold">LLM Training</span>
+                    <span className="text-sm text-gray-600">Input/output pairs</span>
+                  </button>
+                </div>
+
+
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+                  <div className="flex flex-col items-center">
+                    <Upload className="text-gray-400 mb-2" size={32} />
+                    <span className="font-semibold text-gray-700">Import Dataset</span>
+                    <span className="text-sm text-gray-500 mb-3">Upload JSON file to merge with existing data</span>
+                    <input type="file" accept=".json" onChange={handleImport} className="text-sm" />
+                  </div>
+                </div>
+
+
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h3 className="font-semibold text-gray-800 mb-2">API Schema</h3>
+                  <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto">
+{`{
+  "id": "unique_identifier",
+  "source_name": "media_outlet", 
+  "bloc_alignment": "MAGA|Kremlin|Liberal|Western|Neutral",
+  "event_date": "YYYY-MM-DD",
+  "headline": "article_headline",
+  "summary": "brief_summary", 
+  "narrative_frame": "core_framing",
+  "semantic_injection_score": 0.0-1.0,
+  "sentiment_polarity": -1.0 to 1.0,
+  "archetype_shift_tags": ["transformations"],
+  "source_laundering_flags": ["techniques"],
+  "kri_vector": {
+    "semantic_drift": 0.0-1.0,
+    "sentiment_inversion": 0.0-1.0, 
+    "archetype_incoherence": 0.0-1.0,
+    "temporal_synchrony": 0.0-1.0
+  },
+  "event_category": "classification",
+  "kri_total": "composite

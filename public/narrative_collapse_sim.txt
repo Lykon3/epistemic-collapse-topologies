@@ -1,0 +1,514 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { Play, Pause, RotateCcw, Zap, Shield, Brain } from 'lucide-react';
+
+
+const NarrativeCollapseSimulator = () => {
+  const canvasRef = useRef(null);
+  const animationRef = useRef(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [agents, setAgents] = useState([]);
+  const [narratives, setNarratives] = useState([]);
+  const [kriScore, setKriScore] = useState(0);
+  const [generation, setGeneration] = useState(0);
+  const [selectedMetric, setSelectedMetric] = useState('all');
+  
+  // Simulation parameters
+  const [params, setParams] = useState({
+    populationSize: 200,
+    influenceRadius: 50,
+    semanticDrift: 0.3,
+    sentimentInversion: 0.2,
+    archetypeIncoherence: 0.3,
+    spiritualArmor: 0.4,
+    propagationRate: 0.02
+  });
+
+
+  // Agent states
+  const STATES = {
+    NEUTRAL: '#94a3b8',
+    INFLUENCED: '#f59e0b',
+    CONVERTED: '#dc2626',
+    RESISTANT: '#10b981',
+    COLLAPSED: '#7c3aed'
+  };
+
+
+  // Initialize agents
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const newAgents = [];
+    
+    for (let i = 0; i < params.populationSize; i++) {
+      newAgents.push({
+        id: i,
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        state: STATES.NEUTRAL,
+        beliefVector: Array(5).fill(0).map(() => Math.random()),
+        kriThreshold: 0.5 + Math.random() * 0.3,
+        spiritualArmor: Math.random() < params.spiritualArmor ? 1 : 0,
+        archetypeAlignment: Math.random(),
+        sentimentPolarity: (Math.random() - 0.5) * 2,
+        semanticPosition: [Math.random(), Math.random(), Math.random()],
+        influenceAccumulator: 0,
+        memoryTrace: []
+      });
+    }
+    
+    // Add initial influence nodes (like Stone, foreign actors)
+    for (let i = 0; i < 5; i++) {
+      const idx = Math.floor(Math.random() * newAgents.length);
+      newAgents[idx].state = STATES.INFLUENCED;
+      newAgents[idx].isInfluencer = true;
+    }
+    
+    setAgents(newAgents);
+  }, [params.populationSize, params.spiritualArmor]);
+
+
+  // Calculate KRI for an agent based on drift from neighbors
+  const calculateAgentKRI = (agent, neighbors) => {
+    if (neighbors.length === 0) return 0;
+    
+    let semanticDrift = 0;
+    let sentimentInversion = 0;
+    let archetypeIncoherence = 0;
+    
+    neighbors.forEach(neighbor => {
+      // Semantic drift (cosine distance in belief space)
+      const dotProduct = agent.beliefVector.reduce((sum, val, idx) => 
+        sum + val * neighbor.beliefVector[idx], 0
+      );
+      semanticDrift += 1 - dotProduct;
+      
+      // Sentiment inversion
+      sentimentInversion += Math.abs(agent.sentimentPolarity - neighbor.sentimentPolarity);
+      
+      // Archetype incoherence
+      archetypeIncoherence += Math.abs(agent.archetypeAlignment - neighbor.archetypeAlignment);
+    });
+    
+    const avgSD = semanticDrift / neighbors.length;
+    const avgSI = sentimentInversion / neighbors.length;
+    const avgAI = archetypeIncoherence / neighbors.length;
+    
+    return (
+      params.semanticDrift * avgSD +
+      params.sentimentInversion * avgSI +
+      params.archetypeIncoherence * avgAI
+    );
+  };
+
+
+  // Main simulation step
+  const simulationStep = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    // Clear canvas
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Update agents
+    const newAgents = agents.map(agent => {
+      // Move agents
+      let newX = agent.x + agent.vx;
+      let newY = agent.y + agent.vy;
+      
+      // Bounce off walls
+      if (newX < 0 || newX > canvas.width) agent.vx *= -1;
+      if (newY < 0 || newY > canvas.height) agent.vy *= -1;
+      
+      newX = Math.max(0, Math.min(canvas.width, newX));
+      newY = Math.max(0, Math.min(canvas.height, newY));
+      
+      return { ...agent, x: newX, y: newY };
+    });
+    
+    // Influence propagation
+    const influenceMap = new Map();
+    
+    newAgents.forEach((agent, idx) => {
+      const neighbors = newAgents.filter(other => {
+        const dist = Math.sqrt(
+          Math.pow(agent.x - other.x, 2) + 
+          Math.pow(agent.y - other.y, 2)
+        );
+        return dist < params.influenceRadius && other.id !== agent.id;
+      });
+      
+      // Calculate local KRI
+      const localKRI = calculateAgentKRI(agent, neighbors);
+      
+      // Narrative propagation logic
+      if (agent.state === STATES.INFLUENCED || agent.state === STATES.CONVERTED) {
+        neighbors.forEach(neighbor => {
+          if (neighbor.state === STATES.NEUTRAL) {
+            const influenceProbability = params.propagationRate * 
+              (1 + localKRI) * 
+              (neighbor.spiritualArmor ? 0.3 : 1);
+            
+            if (Math.random() < influenceProbability) {
+              neighbor.influenceAccumulator += 0.1;
+              
+              if (neighbor.influenceAccumulator > neighbor.kriThreshold) {
+                neighbor.state = STATES.INFLUENCED;
+                neighbor.beliefVector = agent.beliefVector.map(v => 
+                  v + (Math.random() - 0.5) * 0.1
+                );
+              }
+            }
+          }
+        });
+      }
+      
+      // Check for narrative collapse
+      if (localKRI > 0.8 && agent.state === STATES.INFLUENCED) {
+        agent.state = STATES.COLLAPSED;
+      }
+      
+      // Resistance emergence
+      if (agent.spiritualArmor && localKRI > 0.6 && agent.state === STATES.NEUTRAL) {
+        agent.state = STATES.RESISTANT;
+      }
+    });
+    
+    // Draw influence fields
+    ctx.globalAlpha = 0.1;
+    newAgents.forEach(agent => {
+      if (agent.state === STATES.INFLUENCED || agent.state === STATES.CONVERTED) {
+        const gradient = ctx.createRadialGradient(
+          agent.x, agent.y, 0,
+          agent.x, agent.y, params.influenceRadius
+        );
+        gradient.addColorStop(0, '#dc2626');
+        gradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(
+          agent.x - params.influenceRadius,
+          agent.y - params.influenceRadius,
+          params.influenceRadius * 2,
+          params.influenceRadius * 2
+        );
+      }
+    });
+    
+    // Draw connections between influenced agents
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#dc2626';
+    ctx.lineWidth = 1;
+    
+    const influenced = newAgents.filter(a => 
+      a.state === STATES.INFLUENCED || a.state === STATES.CONVERTED
+    );
+    
+    influenced.forEach((agent, i) => {
+      influenced.slice(i + 1).forEach(other => {
+        const dist = Math.sqrt(
+          Math.pow(agent.x - other.x, 2) + 
+          Math.pow(agent.y - other.y, 2)
+        );
+        if (dist < params.influenceRadius * 2) {
+          ctx.beginPath();
+          ctx.moveTo(agent.x, agent.y);
+          ctx.lineTo(other.x, other.y);
+          ctx.stroke();
+        }
+      });
+    });
+    
+    // Draw agents
+    ctx.globalAlpha = 1;
+    newAgents.forEach(agent => {
+      ctx.fillStyle = agent.state;
+      ctx.beginPath();
+      ctx.arc(agent.x, agent.y, agent.isInfluencer ? 8 : 5, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Draw spiritual armor
+      if (agent.spiritualArmor) {
+        ctx.strokeStyle = '#60a5fa';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(agent.x, agent.y, 8, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+    
+    // Calculate global KRI
+    const globalKRI = newAgents.reduce((sum, agent) => {
+      const neighbors = newAgents.filter(other => {
+        const dist = Math.sqrt(
+          Math.pow(agent.x - other.x, 2) + 
+          Math.pow(agent.y - other.y, 2)
+        );
+        return dist < params.influenceRadius && other.id !== agent.id;
+      });
+      return sum + calculateAgentKRI(agent, neighbors);
+    }, 0) / newAgents.length;
+    
+    setKriScore(globalKRI);
+    setAgents(newAgents);
+    setGeneration(prev => prev + 1);
+    
+    // Track narrative evolution
+    if (generation % 10 === 0) {
+      const stateCount = {};
+      Object.values(STATES).forEach(state => stateCount[state] = 0);
+      newAgents.forEach(agent => stateCount[agent.state]++);
+      
+      setNarratives(prev => [...prev, {
+        generation,
+        ...stateCount,
+        kri: globalKRI
+      }].slice(-50));
+    }
+  };
+
+
+  // Animation loop
+  useEffect(() => {
+    if (isRunning) {
+      const animate = () => {
+        simulationStep();
+        animationRef.current = requestAnimationFrame(animate);
+      };
+      animationRef.current = requestAnimationFrame(animate);
+    } else {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    }
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [isRunning, agents, params]);
+
+
+  const reset = () => {
+    setIsRunning(false);
+    setGeneration(0);
+    setNarratives([]);
+    setKriScore(0);
+    // Re-initialize agents
+    const canvas = canvasRef.current;
+    const newAgents = [];
+    for (let i = 0; i < params.populationSize; i++) {
+      newAgents.push({
+        id: i,
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        vx: (Math.random() - 0.5) * 0.5,
+        vy: (Math.random() - 0.5) * 0.5,
+        state: STATES.NEUTRAL,
+        beliefVector: Array(5).fill(0).map(() => Math.random()),
+        kriThreshold: 0.5 + Math.random() * 0.3,
+        spiritualArmor: Math.random() < params.spiritualArmor ? 1 : 0,
+        archetypeAlignment: Math.random(),
+        sentimentPolarity: (Math.random() - 0.5) * 2,
+        semanticPosition: [Math.random(), Math.random(), Math.random()],
+        influenceAccumulator: 0,
+        memoryTrace: []
+      });
+    }
+    for (let i = 0; i < 5; i++) {
+      const idx = Math.floor(Math.random() * newAgents.length);
+      newAgents[idx].state = STATES.INFLUENCED;
+      newAgents[idx].isInfluencer = true;
+    }
+    setAgents(newAgents);
+  };
+
+
+  return (
+    <div className="w-full max-w-6xl mx-auto p-6 bg-gray-900 text-white rounded-lg">
+      <div className="mb-6">
+        <h2 className="text-3xl font-bold mb-2 text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-red-600">
+          Narrative Collapse Simulator
+        </h2>
+        <p className="text-gray-400">
+          Watch how influence operations propagate through networks using Kompromat Geometry metrics
+        </p>
+      </div>
+
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Simulation Canvas */}
+        <div className="lg:col-span-2">
+          <div className="bg-gray-800 rounded-lg p-4">
+            <canvas
+              ref={canvasRef}
+              width={600}
+              height={400}
+              className="w-full rounded border border-gray-700"
+            />
+            
+            {/* Controls */}
+            <div className="flex gap-4 mt-4">
+              <button
+                onClick={() => setIsRunning(!isRunning)}
+                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded transition-colors"
+              >
+                {isRunning ? <Pause size={16} /> : <Play size={16} />}
+                {isRunning ? 'Pause' : 'Start'}
+              </button>
+              <button
+                onClick={reset}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
+              >
+                <RotateCcw size={16} />
+                Reset
+              </button>
+            </div>
+            
+            {/* Legend */}
+            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full" style={{backgroundColor: STATES.NEUTRAL}}></div>
+                <span>Neutral</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full" style={{backgroundColor: STATES.INFLUENCED}}></div>
+                <span>Influenced</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full" style={{backgroundColor: STATES.CONVERTED}}></div>
+                <span>Converted</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full" style={{backgroundColor: STATES.RESISTANT}}></div>
+                <span>Resistant</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full" style={{backgroundColor: STATES.COLLAPSED}}></div>
+                <span>Collapsed</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full border-2 border-blue-400" style={{backgroundColor: 'transparent'}}></div>
+                <span>Spiritual Armor</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {/* Metrics Panel */}
+        <div className="space-y-4">
+          {/* KRI Score */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              <Brain className="text-purple-400" size={20} />
+              Kompromat Index
+            </h3>
+            <div className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-red-600">
+              {kriScore.toFixed(3)}
+            </div>
+            <div className="text-sm text-gray-400 mt-1">
+              Generation: {generation}
+            </div>
+          </div>
+
+
+          {/* Parameters */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+              <Zap className="text-yellow-400" size={20} />
+              Influence Parameters
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-gray-400">Semantic Drift Weight</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={params.semanticDrift}
+                  onChange={(e) => setParams({...params, semanticDrift: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <span className="text-xs">{params.semanticDrift.toFixed(1)}</span>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400">Sentiment Inversion Weight</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={params.sentimentInversion}
+                  onChange={(e) => setParams({...params, sentimentInversion: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <span className="text-xs">{params.sentimentInversion.toFixed(1)}</span>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400">Archetype Incoherence Weight</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={params.archetypeIncoherence}
+                  onChange={(e) => setParams({...params, archetypeIncoherence: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <span className="text-xs">{params.archetypeIncoherence.toFixed(1)}</span>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400">Spiritual Armor Prevalence</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={params.spiritualArmor}
+                  onChange={(e) => setParams({...params, spiritualArmor: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <span className="text-xs">{(params.spiritualArmor * 100).toFixed(0)}%</span>
+              </div>
+              <div>
+                <label className="text-sm text-gray-400">Propagation Rate</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="0.1"
+                  step="0.01"
+                  value={params.propagationRate}
+                  onChange={(e) => setParams({...params, propagationRate: parseFloat(e.target.value)})}
+                  className="w-full"
+                />
+                <span className="text-xs">{params.propagationRate.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+
+          {/* Insights */}
+          <div className="bg-gray-800 rounded-lg p-4">
+            <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+              <Shield className="text-green-400" size={20} />
+              System Insights
+            </h3>
+            <div className="text-sm space-y-2 text-gray-300">
+              <p>• Agents with spiritual armor (blue rings) show resistance to narrative influence</p>
+              <p>• High KRI scores indicate narrative instability and potential collapse events</p>
+              <p>• Connected influenced agents form echo chambers that accelerate propagation</p>
+              <p>• Purple agents have experienced "narrative collapse" - complete epistemic breakdown</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+export default NarrativeCollapseSimulator;

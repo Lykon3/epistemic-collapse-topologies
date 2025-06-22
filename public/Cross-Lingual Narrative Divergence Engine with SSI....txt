@@ -1,0 +1,308 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { Brain, Shield, AlertTriangle, Zap, TrendingUp, Activity, Eye, Target, Globe, Languages, GitBranch, Compass, Layers, Network, Mic, Clapperboard, Hash, PersonStanding } from 'lucide-react';
+
+const CrossLingualKompromatEngine = () => {
+ // --- STATE MANAGEMENT ---
+ const [activeTab, setActiveTab] = useState('overview');
+ const [selectedEvent, setSelectedEvent] = useState('ukraine_conflict');
+ const [divergenceThreshold, setDivergenceThreshold] = useState(0.6);
+ const [languagePair, setLanguagePair] = useState('en-ru');
+
+ // --- HARD POWER DATA (EXISTING) ---
+ const geopoliticalEvents = {
+   ukraine_conflict: {
+     name: "Ukraine Conflict Coverage",
+     period: "2022-2024",
+     narrative_divergence: [
+       { date: '2022-02', western_kri: 0.23, brics_kri: 0.67, divergence_delta: 0.44, semantic_drift: 0.78, sentiment_inversion: 0.82, archetype_shift: 0.71, event: 'Conflict initiation' },
+       { date: '2022-09', western_kri: 0.26, brics_kri: 0.84, divergence_delta: 0.58, semantic_drift: 0.89, sentiment_inversion: 0.91, archetype_shift: 0.82, event: 'Mobilization' },
+       { date: '2023-06', western_kri: 0.32, brics_kri: 0.86, divergence_delta: 0.54, semantic_drift: 0.87, sentiment_inversion: 0.89, archetype_shift: 0.81, event: 'Wagner events' },
+       { date: '2024-01', western_kri: 0.35, brics_kri: 0.88, divergence_delta: 0.53, semantic_drift: 0.91, sentiment_inversion: 0.93, archetype_shift: 0.84, event: 'Avdiivka' },
+     ]
+   },
+   // Other events...
+ };
+ const narrativeBifurcationPoints = [
+   { event: 'Russia-Ukraine Conflict', date: '2022-02', western_frame: 'Unprovoked Aggression', brics_frame: 'Proxy Confrontation', divergence_velocity: 0.89, irreversibility_score: 0.94 },
+   { event: 'Taiwan Tensions', date: '2022-08', western_frame: 'Democratic Defense', brics_frame: 'Reunification Rights', divergence_velocity: 0.76, irreversibility_score: 0.79 },
+ ];
+ const manipulationPatterns = {
+   western_specific: [ { pattern: 'Moral Universalism', frequency: 847, strength: 0.73, description: 'Framing local values as universal principles' }],
+   brics_specific: [ { pattern: 'Sovereignty Maximalism', frequency: 923, strength: 0.79, description: 'Absolute sovereignty as overriding principle' }]
+ };
+
+ // --- NEW: SOFT SIGNAL INFERENCE LAYER (SSIL) DATA ---
+ const softSignalData = {
+   culturalDrift: [
+     { date: '2022-02', western_cdi: 0.3, brics_cdi: 0.6, event: 'Political Event: Conflict Start' },
+     { date: '2022-04', western_cdi: 0.32, brics_cdi: 0.65, event: 'Cultural Beat: "Z-Patriot" Rock' },
+     { date: '2022-09', western_cdi: 0.4, brics_cdi: 0.68, event: 'Political Event: Mobilization' },
+     { date: '2023-03', western_cdi: 0.5, brics_cdi: 0.65, event: 'Cultural Beat: "Oppenheimer" Trailer' },
+     { date: '2023-06', western_cdi: 0.45, brics_cdi: 0.72, event: 'Political Event: Wagner Group' },
+     { date: '2024-01', western_cdi: 0.42, brics_cdi: 0.75, event: 'Cultural Beat: "Civil War" Movie' },
+   ],
+   emotionalPriming: {
+     western: [
+       { emotion: 'Righteous Anger', value: 0.8, fill: '#F59E0B' },
+       { emotion: 'Heroic Sacrifice', value: 0.7, fill: '#3B82F6' },
+       { emotion: 'Existential Dread', value: 0.6, fill: '#4B5563' },
+       { emotion: 'Cynical Detachment', value: 0.4, fill: '#10B981' },
+     ],
+     brics: [
+       { emotion: 'Historical Grievance', value: 0.9, fill: '#EF4444' },
+       { emotion: 'Defensive Unity', value: 0.85, fill: '#8B5CF6' },
+       { emotion: 'Victorious Defiance', value: 0.75, fill: '#D97706' },
+       { emotion: 'Spiritual Mission', value: 0.5, fill: '#EC4899' },
+     ]
+   },
+   influencerAffinity: [
+     { name: 'Joe Rogan', x: 0.3, y: -0.2, z: 0.68, bloc: 'brics', LNA: 0.68 },
+     { name: 'Lex Fridman', x: 0.1, y: 0.1, z: 0.45, bloc: 'neutral', LNA: 0.45 },
+     { name: 'Western Fashion YT', x: -0.7, y: 0.6, z: 0.8, bloc: 'western', LNA: 0.21 },
+     { name: 'BRICS Gaming Streamer', x: 0.8, y: -0.5, z: 0.75, bloc: 'brics', LNA: 0.75 },
+     { name: 'Peter Zeihan', x: -0.9, y: -0.8, z: 0.95, bloc: 'western', LNA: 0.05 },
+   ],
+   crossBlocOsmosis: {
+     western_to_brics: 0.28, // CBOI
+     brics_to_western: 0.45, // CBOI
+     soft_sync_events: [
+       { date: '2022-11', western: 'Release of "Andor" (Anti-Empire)', brics: 'Surge in "Decolonization" Memes', sse: true },
+       { date: '2024-03', western: 'Conservative push for "National Divorce"', brics: 'RT highlights US internal division', sse: true },
+     ]
+   }
+ };
+ 
+ const currentData = geopoliticalEvents[selectedEvent];
+
+ // --- UI COMPONENTS ---
+ const MetricCard = ({ title, value, subtitle, icon: Icon, color, comparison }) => (
+   <div className="bg-white rounded-lg p-4 shadow-md border-l-4" style={{ borderLeftColor: color }}>
+     <div className="flex items-center justify-between">
+       <div>
+         <h3 className="text-sm font-medium text-gray-600">{title}</h3>
+         <p className="text-xl font-bold text-gray-900">{value}</p>
+         {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
+       </div>
+       <Icon size={24} style={{ color }} />
+     </div>
+   </div>
+ );
+
+ // --- SSIL VISUALIZATION COMPONENTS ---
+ const CulturalDriftChart = () => (
+   <div className="bg-white rounded-lg p-6 shadow-lg">
+     <h3 className="text-lg font-semibold mb-4 flex items-center"><TrendingUp className="mr-2 text-green-500"/>Cultural Drift Index (CDI) Timeline</h3>
+     <ResponsiveContainer width="100%" height={300}>
+       <LineChart data={softSignalData.culturalDrift}>
+         <CartesianGrid strokeDasharray="3 3" />
+         <XAxis dataKey="date" />
+         <YAxis domain={[0, 1]}/>
+         <Tooltip content={({ active, payload }) => {
+           if (active && payload && payload.length) {
+             return <div className="bg-white p-2 border rounded shadow-lg text-xs"><p className="font-bold">{payload[0].payload.event}</p></div>;
+           }
+           return null;
+         }}/>
+         <Legend />
+         <Line type="monotone" dataKey="western_cdi" stroke="#3B82F6" strokeWidth={2} name="Western CDI"/>
+         <Line type="monotone" dataKey="brics_cdi" stroke="#EF4444" strokeWidth={2} name="BRICS CDI"/>
+       </LineChart>
+     </ResponsiveContainer>
+   </div>
+ );
+
+ const EmotionalPrimingChart = () => (
+    <div className="bg-white rounded-lg p-6 shadow-lg">
+     <h3 className="text-lg font-semibold mb-4 flex items-center"><Brain className="mr-2 text-pink-500"/>Emotional Priming Bias (EPB)</h3>
+     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+       <div>
+         <h4 className="font-semibold text-center mb-2 text-blue-600">Western Media</h4>
+          <ResponsiveContainer width="100%" height={250}>
+             <BarChart data={softSignalData.emotionalPriming.western} layout="vertical">
+               <XAxis type="number" hide />
+               <YAxis type="category" dataKey="emotion" width={120} tick={{fontSize: 12}}/>
+               <Bar dataKey="value" barSize={20}>
+                 {softSignalData.emotionalPriming.western.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+               </Bar>
+             </BarChart>
+          </ResponsiveContainer>
+       </div>
+       <div>
+          <h4 className="font-semibold text-center mb-2 text-red-600">BRICS Media</h4>
+          <ResponsiveContainer width="100%" height={250}>
+             <BarChart data={softSignalData.emotionalPriming.brics} layout="vertical">
+               <XAxis type="number" hide />
+               <YAxis type="category" dataKey="emotion" width={120} tick={{fontSize: 12}}/>
+               <Bar dataKey="value" barSize={20}>
+                 {softSignalData.emotionalPriming.brics.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
+               </Bar>
+             </BarChart>
+          </ResponsiveContainer>
+       </div>
+     </div>
+   </div>
+ );
+
+ const InfluencerVectorMap = () => (
+   <div className="bg-white rounded-lg p-6 shadow-lg">
+       <h3 className="text-lg font-semibold mb-4 flex items-center"><PersonStanding className="mr-2 text-indigo-500"/>Latent Narrative Affinity (LNA) - Influencer Vectors</h3>
+       <ResponsiveContainer width="100%" height={350}>
+           <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+               <CartesianGrid />
+               <XAxis type="number" dataKey="x" name="Western Frame Affinity" domain={[-1, 1]} label={{ value: 'Western-Aligned', position: 'insideLeft', offset: -15, dy: 20 }}/>
+               <YAxis type="number" dataKey="y" name="BRICS Frame Affinity" domain={[-1, 1]} label={{ value: 'BRICS-Aligned', angle: -90, position: 'insideTop', dy: -10, dx: -20}}/>
+               <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => {
+                   if (active && payload && payload.length) {
+                       const data = payload[0].payload;
+                       return (
+                           <div className="bg-white p-2 border rounded shadow-lg text-xs">
+                               <p className="font-bold">{data.name}</p>
+                               <p>LNA Score: <span className="font-bold">{data.LNA.toFixed(2)}</span></p>
+                           </div>
+                       );
+                   }
+                   return null;
+               }}/>
+               <Scatter name="Influencers" data={softSignalData.influencerAffinity}>
+                 {softSignalData.influencerAffinity.map((p, index) => (
+                   <Cell key={`cell-${index}`} fill={p.bloc === 'western' ? '#3B82F6' : p.bloc === 'brics' ? '#EF4444' : '#6B7280'} />
+                 ))}
+               </Scatter>
+           </ScatterChart>
+       </ResponsiveContainer>
+   </div>
+ );
+ 
+ const CrossBlocOsmosisFlow = () => (
+   <div className="bg-white rounded-lg p-6 shadow-lg">
+     <h3 className="text-lg font-semibold mb-4 flex items-center"><Layers className="mr-2 text-teal-500"/>Cross-Bloc Osmotic Index (CBOI)</h3>
+     <div className="flex justify-around items-center text-center">
+       <div className="w-1/3">
+         <h4 className="text-lg font-bold text-blue-600">WESTERN BLOC</h4>
+       </div>
+       <div className="w-1/3">
+           <div className="text-sm font-semibold">BRICS → WESTERN</div>
+           <div className="w-full bg-gray-200 rounded-full h-2.5 my-1">
+               <div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${softSignalData.crossBlocOsmosis.brics_to_western * 100}%` }}></div>
+           </div>
+           <div className="text-lg font-bold">{softSignalData.crossBlocOsmosis.brics_to_western.toFixed(2)}</div>
+           
+           <div className="text-sm font-semibold mt-4">WESTERN → BRICS</div>
+           <div className="w-full bg-gray-200 rounded-full h-2.5 my-1">
+               <div className="bg-blue-500 h-2.5 rounded-full" style={{ width: `${softSignalData.crossBlocOsmosis.western_to_brics * 100}%` }}></div>
+           </div>
+           <div className="text-lg font-bold">{softSignalData.crossBlocOsmosis.western_to_brics.toFixed(2)}</div>
+       </div>
+       <div className="w-1/3">
+          <h4 className="text-lg font-bold text-red-600">BRICS BLOC</h4>
+       </div>
+     </div>
+      <div className="mt-6">
+         <h4 className="text-md font-semibold mb-2">Soft Sync Events (SSE):</h4>
+         <ul className="space-y-2 text-xs">
+            {softSignalData.crossBlocOsmosis.soft_sync_events.map((event, i) => (
+              <li key={i} className="flex items-center p-2 bg-gray-50 rounded-md">
+                <Zap size={16} className="text-yellow-500 mr-3"/>
+                <div>
+                  <span className="font-semibold text-blue-700">Western:</span> {event.western} <br/>
+                  <span className="font-semibold text-red-700">BRICS:</span> {event.brics}
+                </div>
+              </li>
+            ))}
+         </ul>
+      </div>
+   </div>
+ );
+ 
+ // --- EXISTING VISUALIZATION COMPONENTS (ArchetypalRadar, etc.) ---
+ const ArchetypalRadar = () => { /* ... existing code ... */ return <div/>; };
+ const BifurcationTimeline = () => { /* ... existing code ... */ return <div/>; };
+ const EpistemicDivergenceMap = () => { /* ... existing code ... */ return <div/>; };
+
+
+ // --- MAIN RENDER ---
+ return (
+   <div className="min-h-screen bg-gray-100 p-4 font-sans">
+     <div className="max-w-7xl mx-auto">
+       {/* Header */}
+       <div className="bg-white rounded-lg shadow-lg mb-4 p-4">
+          <div className="flex flex-wrap items-center justify-between">
+             <div>
+               <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+                 <Globe className="mr-3 text-purple-600" />
+                 Cross-Lingual Narrative Engine
+               </h1>
+                <p className="text-gray-600 text-sm mt-1">
+                 Mapping Hard & Soft Power Vectors in Global Information Space
+               </p>
+             </div>
+              <div className="flex items-center space-x-2 mt-2 md:mt-0">
+                 <select value={selectedEvent} onChange={(e) => setSelectedEvent(e.target.value)} className="text-xs p-1 border rounded-md">
+                   <option value="ukraine_conflict">Ukraine Conflict</option>
+                 </select>
+              </div>
+          </div>
+
+         {/* Tab Navigation */}
+         <div className="border-b border-gray-200 mt-4">
+           <nav className="-mb-px flex space-x-4 overflow-x-auto">
+             {[
+               { id: 'overview', label: 'Divergence', icon: Eye },
+               { id: 'soft_influence', label: 'Soft Influence', icon: Brain },
+               { id: 'patterns', label: 'Patterns', icon: Target },
+               { id: 'bifurcation', label: 'Bifurcation', icon: GitBranch },
+             ].map(({ id, label, icon: Icon }) => (
+               <button key={id} onClick={() => setActiveTab(id)}
+                 className={`py-2 px-2 flex items-center text-xs sm:text-sm font-medium border-b-2 ${
+                   activeTab === id ? 'border-purple-500 text-purple-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                 }`}>
+                 <Icon size={14} className="mr-1" /> {label}
+               </button>
+             ))}
+           </nav>
+         </div>
+       </div>
+
+       {/* Tab Content */}
+       {activeTab === 'overview' && (
+         <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+               <MetricCard title="Narrative Divergence Δ" value={currentData.narrative_divergence.slice(-1)[0].divergence_delta.toFixed(3)} icon={GitBranch} color="#8B5CF6"/>
+               <MetricCard title="Semantic Drift" value={currentData.narrative_divergence.slice(-1)[0].semantic_drift.toFixed(3)} icon={Zap} color="#EF4444"/>
+               <MetricCard title="Archetype Shift" value={currentData.narrative_divergence.slice(-1)[0].archetype_shift.toFixed(3)} icon={Shield} color="#F59E0B"/>
+               <MetricCard title="Epistemic Synchrony" value="0.127" icon={Activity} color="#10B981"/>
+            </div>
+            {/* Other Overview Charts... */}
+         </div>
+       )}
+
+       {activeTab === 'soft_influence' && (
+         <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+               <MetricCard title="Cultural Drift Index (CDI)" value={softSignalData.culturalDrift.slice(-1)[0].western_cdi.toFixed(2)} subtitle="Western Bloc" icon={TrendingUp} color="#3B82F6"/>
+               <MetricCard title="Cultural Drift Index (CDI)" value={softSignalData.culturalDrift.slice(-1)[0].brics_cdi.toFixed(2)} subtitle="BRICS Bloc" icon={TrendingUp} color="#EF4444"/>
+               <MetricCard title="Latent Narrative Affinity (LNA)" value="0.68" subtitle="J. Rogan (BRICS-leaning)" icon={PersonStanding} color="#D97706"/>
+               <MetricCard title="Cross-Bloc Osmosis (CBOI)" value={softSignalData.crossBlocOsmosis.brics_to_western.toFixed(2)} subtitle="BRICS to West Flow" icon={Layers} color="#10B981"/>
+            </div>
+           <CulturalDriftChart />
+           <EmotionalPrimingChart />
+           <InfluencerVectorMap />
+           <CrossBlocOsmosisFlow />
+         </div>
+       )}
+       
+       {activeTab === 'patterns' && (
+          <p>Manipulation patterns content goes here...</p>
+       )}
+
+       {activeTab === 'bifurcation' && (
+         <BifurcationTimeline />
+       )}
+
+     </div>
+   </div>
+ );
+};
+
+export default CrossLingualKompromatEngine;

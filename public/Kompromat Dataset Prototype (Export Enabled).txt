@@ -1,0 +1,208 @@
+﻿import React, { useState, useEffect } from 'react';
+import { BarChart, Bar, Cell, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Tooltip, Legend, XAxis, YAxis, CartesianGrid } from 'recharts';
+import { Brain, Database, Download, Filter } from 'lucide-react';
+
+
+const KompromatDatasetPrototype = () => {
+ const [activeTab, setActiveTab] = useState('dataset');
+ const [selectedBloc, setSelectedBloc] = useState('all');
+ const [filterEvent, setFilterEvent] = useState('all');
+ const [sortBy, setSortBy] = useState('kri_total');
+
+
+ // --- DATASET ---
+ // This is the core dataset for training and analysis.
+ const narrativeDataset = [
+   // January 6th Event - Multi-perspective analysis
+   {
+     "id": "j6_maga_1", "source_name": "Breitbart", "bloc_alignment": "MAGA", "event_date": "2021-01-06",
+     "headline": "Patriots Rally Against a Rigged System", "summary": "Protesters gather in D.C. to voice outrage over a stolen election.",
+     "narrative_frame": "Populist uprising against elite fraud", "semantic_injection_score": 0.82, "sentiment_polarity": -0.76,
+     "archetype_shift_tags": ["Whistleblower→Insurrectionist", "Martyrization of Protesters"], "source_laundering_flags": ["Hyperpartisan recursion", "Selective eyewitness citation"],
+     "kri_vector": { "semantic_drift": 0.73, "sentiment_inversion": 0.79, "archetype_incoherence": 0.68, "temporal_synchrony": 0.45 },
+     "event_category": "january_6th", "kri_total": 0.663
+   },
+   {
+     "id": "j6_mainstream_1", "source_name": "CNN", "bloc_alignment": "Liberal", "event_date": "2021-01-06",
+     "headline": "Violent Mob Storms Capitol in Unprecedented Attack on Democracy", "summary": "Pro-Trump rioters breach Capitol security, forcing evacuation of Congress.",
+     "narrative_frame": "Insurrection against democratic institutions", "semantic_injection_score": 0.67, "sentiment_polarity": -0.89,
+     "archetype_shift_tags": ["Protesters→Terrorists", "Trump→Authoritarian"], "source_laundering_flags": ["Expert consensus manufacturing"],
+     "kri_vector": { "semantic_drift": 0.58, "sentiment_inversion": 0.71, "archetype_incoherence": 0.52, "temporal_synchrony": 0.38 },
+     "event_category": "january_6th", "kri_total": 0.548
+   },
+   {
+     "id": "j6_neutral_1", "source_name": "Associated Press", "bloc_alignment": "Neutral", "event_date": "2021-01-06",
+     "headline": "Congress Evacuated as Protesters Enter Capitol Building", "summary": "Electoral certification disrupted as crowds breach Capitol security perimeter.",
+     "narrative_frame": "Breaking news coverage of security breach", "semantic_injection_score": 0.18, "sentiment_polarity": -0.12,
+     "archetype_shift_tags": [], "source_laundering_flags": [],
+     "kri_vector": { "semantic_drift": 0.23, "sentiment_inversion": 0.15, "archetype_incoherence": 0.08, "temporal_synchrony": 0.21 },
+     "event_category": "january_6th", "kri_total": 0.168
+   },
+   // Ukraine Conflict - Multi-perspective analysis
+   {
+     "id": "ukraine_kremlin_1", "source_name": "RT", "bloc_alignment": "Kremlin", "event_date": "2022-02-24",
+     "headline": "Special Operation Aims to De-Nazify Ukraine", "summary": "Russian forces initiate military operations, citing protection of Russian-speaking populations.",
+     "narrative_frame": "Defensive intervention against Western-backed extremism", "semantic_injection_score": 0.87, "sentiment_polarity": 0.34,
+     "archetype_shift_tags": ["Protector→Peacekeeper", "Ukrainians→Nazi proxies"], "source_laundering_flags": ["Citing fringe Western analysts", "Echo amplification from Telegram"],
+     "kri_vector": { "semantic_drift": 0.92, "sentiment_inversion": 0.81, "archetype_incoherence": 0.77, "temporal_synchrony": 0.59 },
+     "event_category": "ukraine_conflict", "kri_total": 0.773
+   },
+   {
+     "id": "ukraine_western_1", "source_name": "BBC", "bloc_alignment": "Western", "event_date": "2022-02-24",
+     "headline": "Russia Launches Full-Scale Invasion of Ukraine", "summary": "Russian forces attack multiple Ukrainian cities in an unprovoked act of aggression.",
+     "narrative_frame": "Illegal aggression against sovereign democracy", "semantic_injection_score": 0.61, "sentiment_polarity": -0.78,
+     "archetype_shift_tags": ["Putin→War Criminal", "Ukraine→Democratic Martyr"], "source_laundering_flags": ["NATO source prioritization"],
+     "kri_vector": { "semantic_drift": 0.54, "sentiment_inversion": 0.67, "archetype_incoherence": 0.43, "temporal_synchrony": 0.31 },
+     "event_category": "ukraine_conflict", "kri_total": 0.488
+   },
+   // Additional entries can be added here following the same schema
+ ];
+
+ // --- DERIVED STATE & FILTERING LOGIC ---
+ const [filteredData, setFilteredData] = useState(narrativeDataset);
+
+ useEffect(() => {
+   // Filter the data based on selections
+   let data = narrativeDataset.filter(item => {
+     const blocMatch = selectedBloc === 'all' || item.bloc_alignment === selectedBloc;
+     const eventMatch = filterEvent === 'all' || item.event_category === filterEvent;
+     return blocMatch && eventMatch;
+   });
+
+   // Sort the filtered data
+   data.sort((a, b) => {
+     if (sortBy === 'kri_total') return b.kri_total - a.kri_total;
+     if (sortBy === 'semantic_injection_score') return b.semantic_injection_score - a.semantic_injection_score;
+     if (sortBy === 'date') return new Date(b.event_date) - new Date(a.event_date);
+     return 0;
+   });
+
+   setFilteredData(data);
+ }, [selectedBloc, filterEvent, sortBy, narrativeDataset]);
+
+
+ // --- AGGREGATED METRICS FOR ANALYSIS ---
+ const avgMetricsByBloc = ['MAGA', 'Kremlin', 'Liberal', 'Western', 'Neutral'].map(bloc => {
+   const articles = narrativeDataset.filter(d => d.bloc_alignment === bloc);
+   if (articles.length === 0) return null;
+   const avg = (field, vector = true) => articles.reduce((sum, a) => sum + (vector ? a.kri_vector[field] : a[field]), 0) / articles.length;
+   return {
+     bloc,
+     count: articles.length,
+     avg_kri_total: avg('kri_total', false),
+     avg_semantic_drift: avg('semantic_drift'),
+     avg_sentiment_inversion: avg('sentiment_inversion'),
+   };
+ }).filter(Boolean);
+
+
+ // --- NEW: EXPORT FUNCTIONALITY ---
+ const handleExport = () => {
+   // Convert the currently filtered and sorted data to a JSON string
+   const jsonString = JSON.stringify(filteredData, null, 2);
+   
+   // Create a Blob from the JSON string
+   const blob = new Blob([jsonString], { type: 'application/json' });
+   
+   // Create a URL for the Blob
+   const url = URL.createObjectURL(blob);
+   
+   // Create a temporary anchor element and trigger the download
+   const a = document.createElement('a');
+   a.href = url;
+   a.download = 'kompromat-dataset.json'; // Set the file name for the download
+   document.body.appendChild(a);
+   a.click();
+   
+   // Clean up by removing the temporary anchor and revoking the URL
+   document.body.removeChild(a);
+   URL.revokeObjectURL(url);
+ };
+
+
+ // --- UI CONSTANTS ---
+ const COLORS = {
+   MAGA: '#DC2626', Kremlin: '#7C2D12', Liberal: '#2563EB', Western: '#059669', Neutral: '#6B7280'
+ };
+
+
+ // --- SUB-COMPONENTS ---
+ const DatasetEntry = ({ entry }) => (
+   <div className="bg-white rounded-lg shadow-md p-4 border-l-4" style={{ borderLeftColor: COLORS[entry.bloc_alignment] }}>
+     <div className="flex justify-between items-start mb-2">
+       <div>
+         <span className={`px-2 py-0.5 rounded-full text-xs font-semibold text-white`} style={{ backgroundColor: COLORS[entry.bloc_alignment] }}>{entry.bloc_alignment}</span>
+         <span className="text-sm text-gray-500 ml-2">{entry.source_name} - {entry.event_date}</span>
+       </div>
+       <div className="text-right">
+         <div className="text-xl font-bold" style={{ color: COLORS[entry.bloc_alignment] }}>{entry.kri_total.toFixed(3)}</div>
+         <div className="text-xs text-gray-500">KRI Score</div>
+       </div>
+     </div>
+     <h3 className="text-md font-bold text-gray-800 mb-1">{entry.headline}</h3>
+     <p className="text-sm text-gray-600 italic">Frame: {entry.narrative_frame}</p>
+   </div>
+ );
+
+ const ExportableSchema = () => (
+   <div className="bg-gray-50 rounded-lg p-6">
+     <h3 className="text-lg font-semibold mb-4 flex items-center"><Database className="mr-2 text-purple-600"/>Dataset Schema</h3>
+     <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto">{`{
+ "id": "string", "source_name": "string", "bloc_alignment": "string", "event_date": "YYYY-MM-DD",
+ "headline": "string", "summary": "string", "narrative_frame": "string",
+ "semantic_injection_score": "float", "sentiment_polarity": "float",
+ "archetype_shift_tags": ["string"], "source_laundering_flags": ["string"],
+ "kri_vector": { "semantic_drift": "float", "sentiment_inversion": "float", ... },
+ "event_category": "string", "kri_total": "float"
+}`}</pre>
+   </div>
+ );
+
+
+ // --- MAIN RENDER ---
+ return (
+   <div className="min-h-screen bg-gray-100 p-4 font-sans">
+     <div className="max-w-4xl mx-auto">
+       <header className="bg-white rounded-lg shadow-md mb-4 p-4">
+         <h1 className="text-2xl font-bold text-gray-800 flex items-center"><Database className="mr-2 text-purple-600"/>Kompromat Geometry Dataset</h1>
+         <p className="text-gray-600 mt-1">An interactive corpus for analyzing narrative manipulation.</p>
+       </header>
+
+       <main>
+         <div className="bg-white rounded-lg shadow-md p-4">
+           <div className="flex flex-wrap gap-4 items-center justify-between mb-4 pb-4 border-b">
+             {/* Filters */}
+             <div className="flex flex-wrap gap-4">
+               <select value={selectedBloc} onChange={e => setSelectedBloc(e.target.value)} className="p-2 border rounded-md text-sm">
+                 <option value="all">All Blocs</option>
+                 <option value="MAGA">MAGA</option>
+                 <option value="Kremlin">Kremlin</option>
+                 <option value="Liberal">Liberal</option>
+                 <option value="Western">Western</option>
+                 <option value="Neutral">Neutral</option>
+               </select>
+               <select value={filterEvent} onChange={e => setFilterEvent(e.target.value)} className="p-2 border rounded-md text-sm">
+                 <option value="all">All Events</option>
+                 <option value="january_6th">January 6th</option>
+                 <option value="ukraine_conflict">Ukraine Conflict</option>
+               </select>
+             </div>
+             {/* Export Button */}
+             <button onClick={handleExport} className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 flex items-center text-sm">
+               <Download size={16} className="mr-2"/>Export Filtered JSON
+             </button>
+           </div>
+           
+           {/* Main Content: Dataset Entries */}
+           <h2 className="text-lg font-semibold text-gray-800 mb-2">Dataset Entries ({filteredData.length})</h2>
+           <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-2">
+             {filteredData.map(entry => <DatasetEntry key={entry.id} entry={entry}/>)}
+           </div>
+         </div>
+       </main>
+     </div>
+   </div>
+ );
+};
+
+export default KompromatDatasetPrototype;
