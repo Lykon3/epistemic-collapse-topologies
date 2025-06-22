@@ -1,0 +1,9 @@
+{
+  "name": "narrative-preflight-dynamic",
+  "version": "1.0.0",
+  "description": "Dynamic Narrative Scanner with local keyword analysis and visual feedback.",
+  "scripts": {
+    "vercel-build": "echo 'Static build complete.'"
+  },
+  "license": "MIT"
+}
