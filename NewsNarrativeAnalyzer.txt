@@ -1,0 +1,527 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
+import { Brain, Shield, AlertTriangle, Zap, TrendingUp, Activity, Eye, Target, Upload, FileText, Search, Filter } from 'lucide-react';
+
+
+const NewsNarrativeAnalyzer = () => {
+  const [activeTab, setActiveTab] = useState('upload');
+  const [analysisMode, setAnalysisMode] = useState('temporal');
+  const [selectedSubject, setSelectedSubject] = useState('all');
+  const [timeWindow, setTimeWindow] = useState('monthly');
+  const [detectionThreshold, setDetectionThreshold] = useState(0.6);
+  const [processedData, setProcessedData] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+
+  // Simulated processed news data based on the ISOT dataset structure
+  const sampleAnalysis = {
+    temporal_analysis: [
+      { date: '2016-01', fake_articles: 1245, true_articles: 1834, fake_kri: 0.72, true_kri: 0.23, narrative_divergence: 0.49 },
+      { date: '2016-02', fake_articles: 1567, true_articles: 1923, fake_kri: 0.68, true_kri: 0.25, narrative_divergence: 0.43 },
+      { date: '2016-03', fake_articles: 1834, true_articles: 1756, fake_kri: 0.75, true_kri: 0.22, narrative_divergence: 0.53 },
+      { date: '2016-04', fake_articles: 2156, true_articles: 1645, fake_kri: 0.81, true_kri: 0.24, narrative_divergence: 0.57 },
+      { date: '2016-05', fake_articles: 2789, true_articles: 1523, fake_kri: 0.87, true_kri: 0.26, narrative_divergence: 0.61 },
+      { date: '2016-06', fake_articles: 3234, true_articles: 1234, fake_kri: 0.89, true_kri: 0.28, narrative_divergence: 0.61 },
+      { date: '2016-07', fake_articles: 2987, true_articles: 1456, fake_kri: 0.84, true_kri: 0.25, narrative_divergence: 0.59 },
+      { date: '2016-08', fake_articles: 2567, true_articles: 1678, fake_kri: 0.79, true_kri: 0.23, narrative_divergence: 0.56 }
+    ],
+    subject_analysis: [
+      { subject: 'politicsNews', fake_count: 11272, true_count: 12635, avg_fake_kri: 0.84, avg_true_kri: 0.24 },
+      { subject: 'worldnews', fake_count: 5432, true_count: 4523, avg_fake_kri: 0.76, avg_true_kri: 0.26 },
+      { subject: 'news', fake_count: 4567, true_count: 3234, avg_fake_kri: 0.71, avg_true_kri: 0.28 },
+      { subject: 'left-news', fake_count: 1789, true_count: 456, avg_fake_kri: 0.88, avg_true_kri: 0.22 },
+      { subject: 'Government News', fake_count: 1234, true_count: 234, avg_fake_kri: 0.92, avg_true_kri: 0.25 },
+      { subject: 'US_News', fake_count: 987, true_articles: 123, avg_fake_kri: 0.86, avg_true_kri: 0.27 }
+    ],
+    narrative_patterns: [
+      { pattern: 'Semantic Injection', frequency: 3456, avg_kri: 0.87, description: 'Insertion of emotionally charged terms without context' },
+      { pattern: 'Temporal Displacement', frequency: 2789, avg_kri: 0.82, description: 'Misrepresenting timing of events' },
+      { pattern: 'Source Laundering', frequency: 2234, avg_kri: 0.79, description: 'Citing unreliable sources as authoritative' },
+      { pattern: 'Emotional Escalation', frequency: 1987, avg_kri: 0.85, description: 'Progressive amplification of emotional language' },
+      { pattern: 'Context Stripping', frequency: 1567, avg_kri: 0.78, description: 'Removing contextual information' }
+    ],
+    manipulation_vectors: [
+      { vector: 'Sentiment Polarization', strength: 0.89, articles_affected: 15234 },
+      { vector: 'Factual Distortion', strength: 0.76, articles_affected: 12456 },
+      { vector: 'Temporal Confusion', strength: 0.68, articles_affected: 8765 },
+      { vector: 'Source Credibility Erosion', strength: 0.82, articles_affected: 9876 },
+      { vector: 'Narrative Fragmentation', strength: 0.74, articles_affected: 7654 }
+    ]
+  };
+
+
+  const COLORS = ['#8B5CF6', '#EF4444', '#F59E0B', '#10B981', '#06B6D4', '#84CC16'];
+
+
+  const FileUploadZone = () => (
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-purple-400 transition-colors">
+      <Upload className="mx-auto text-gray-400 mb-4" size={48} />
+      <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload News Dataset</h3>
+      <p className="text-gray-600 mb-4">
+        Upload CSV files (Fake.csv, True.csv) following the ISOT dataset schema
+      </p>
+      <div className="space-y-2 text-sm text-gray-500">
+        <p>Expected columns: title, text, subject, date</p>
+        <p>Supports both fake and real news articles for comparative analysis</p>
+      </div>
+      <button className="mt-4 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+        Choose Files
+      </button>
+    </div>
+  );
+
+
+  const ProcessingStatus = () => (
+    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+      <div className="flex items-center">
+        <Activity className="animate-spin text-blue-600 mr-3" size={20} />
+        <div>
+          <h3 className="text-blue-800 font-semibold">Processing News Articles</h3>
+          <p className="text-blue-700 text-sm mt-1">
+            Analyzing narrative patterns across {sampleAnalysis.temporal_analysis.reduce((sum, item) => sum + item.fake_articles + item.true_articles, 0).toLocaleString()} articles...
+          </p>
+        </div>
+      </div>
+      <div className="mt-4 bg-blue-200 rounded-full h-2">
+        <div className="bg-blue-600 h-2 rounded-full w-3/4 transition-all duration-300"></div>
+      </div>
+    </div>
+  );
+
+
+  const MetricCard = ({ title, value, subtitle, icon: Icon, color, trend }) => (
+    <div className="bg-white rounded-lg p-6 shadow-lg border-l-4" style={{ borderLeftColor: color }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium text-gray-600 mb-1">{title}</h3>
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          {trend && (
+            <p className={`text-xs ${trend > 0 ? 'text-red-600' : 'text-green-600'} flex items-center mt-1`}>
+              <TrendingUp size={12} className="mr-1" />
+              {trend > 0 ? '+' : ''}{(trend * 100).toFixed(1)}% vs baseline
+            </p>
+          )}
+        </div>
+        <Icon size={24} style={{ color }} />
+      </div>
+    </div>
+  );
+
+
+  const ManipulationAlert = ({ pattern, strength, articles }) => (
+    <div className={`p-4 rounded-lg border-l-4 ${
+      strength > 0.8 ? 'bg-red-50 border-red-500' :
+      strength > 0.6 ? 'bg-yellow-50 border-yellow-500' :
+      'bg-blue-50 border-blue-500'
+    }`}>
+      <div className="flex justify-between items-center">
+        <div>
+          <h4 className="font-semibold text-gray-900">{pattern}</h4>
+          <p className="text-sm text-gray-600">{articles.toLocaleString()} articles affected</p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className={`w-16 h-2 rounded-full ${
+            strength > 0.8 ? 'bg-red-200' :
+            strength > 0.6 ? 'bg-yellow-200' :
+            'bg-blue-200'
+          }`}>
+            <div 
+              className={`h-full rounded-full ${
+                strength > 0.8 ? 'bg-red-600' :
+                strength > 0.6 ? 'bg-yellow-600' :
+                'bg-blue-600'
+              }`}
+              style={{ width: `${strength * 100}%` }}
+            />
+          </div>
+          <span className="text-sm font-semibold">{(strength * 100).toFixed(0)}%</span>
+        </div>
+      </div>
+    </div>
+  );
+
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg mb-6 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+                <Brain className="mr-3 text-purple-600" size={32} />
+                News Narrative Manipulation Detector
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Large-scale analysis of narrative patterns in news media using Kompromat Geometry
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <select 
+                value={analysisMode} 
+                onChange={(e) => setAnalysisMode(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="temporal">Temporal Analysis</option>
+                <option value="subject">Subject Analysis</option>
+                <option value="pattern">Pattern Detection</option>
+                <option value="vector">Manipulation Vectors</option>
+              </select>
+              <input
+                type="range"
+                min="0.3"
+                max="1.0"
+                step="0.05"
+                value={detectionThreshold}
+                onChange={(e) => setDetectionThreshold(parseFloat(e.target.value))}
+                className="w-32"
+              />
+              <span className="text-sm text-gray-600">
+                Threshold: {detectionThreshold.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
+              {[
+                { id: 'upload', label: 'Data Upload', icon: Upload },
+                { id: 'analysis', label: 'Analysis Dashboard', icon: Activity },
+                { id: 'patterns', label: 'Pattern Detection', icon: Target },
+                { id: 'alerts', label: 'Manipulation Alerts', icon: AlertTriangle }
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === id
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon size={16} className="mr-2" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+
+          {activeTab === 'upload' && (
+            <div className="space-y-6">
+              <FileUploadZone />
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <FileText className="text-purple-600 mb-3" size={24} />
+                  <h3 className="font-semibold text-gray-900 mb-2">Dataset Requirements</h3>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• CSV format with headers</li>
+                    <li>• Columns: title, text, subject, date</li>
+                    <li>• Minimum 1000 articles for reliable analysis</li>
+                    <li>• Temporal range of at least 6 months</li>
+                  </ul>
+                </div>
+
+
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <Brain className="text-purple-600 mb-3" size={24} />
+                  <h3 className="font-semibold text-gray-900 mb-2">Analysis Features</h3>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Semantic drift detection</li>
+                    <li>• Sentiment manipulation patterns</li>
+                    <li>• Temporal narrative coherence</li>
+                    <li>• Cross-source validation</li>
+                  </ul>
+                </div>
+
+
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <Shield className="text-purple-600 mb-3" size={24} />
+                  <h3 className="font-semibold text-gray-900 mb-2">Privacy & Ethics</h3>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• No personal data retention</li>
+                    <li>• Aggregate pattern analysis only</li>
+                    <li>• Source anonymization</li>
+                    <li>• Transparent methodology</li>
+                  </ul>
+                </div>
+              </div>
+
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 className="text-blue-800 font-semibold mb-2">Demo Dataset Loaded</h3>
+                <p className="text-blue-700 text-sm">
+                  Using sample data from ISOT Fake News Dataset for demonstration. 
+                  Upload your own dataset to analyze specific news sources or time periods.
+                </p>
+              </div>
+            </div>
+          )}
+
+
+          {activeTab === 'analysis' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <MetricCard
+                  title="Total Articles Analyzed"
+                  value="44,919"
+                  subtitle="23,502 fake • 21,417 true"
+                  icon={FileText}
+                  color="#8B5CF6"
+                />
+                <MetricCard
+                  title="Average Fake News KRI"
+                  value="0.823"
+                  subtitle="High manipulation index"
+                  icon={AlertTriangle}
+                  color="#EF4444"
+                  trend={0.15}
+                />
+                <MetricCard
+                  title="Average True News KRI"
+                  value="0.251"
+                  subtitle="Normal baseline range"
+                  icon={Shield}
+                  color="#10B981"
+                  trend={-0.02}
+                />
+                <MetricCard
+                  title="Narrative Divergence"
+                  value="0.572"
+                  subtitle="Significant pattern detected"
+                  icon={TrendingUp}
+                  color="#F59E0B"
+                  trend={0.23}
+                />
+              </div>
+
+
+              {analysisMode === 'temporal' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-lg p-6 shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4">Temporal KRI Analysis</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={sampleAnalysis.temporal_analysis}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Line type="monotone" dataKey="fake_kri" stroke="#EF4444" strokeWidth={3} name="Fake News KRI" />
+                        <Line type="monotone" dataKey="true_kri" stroke="#10B981" strokeWidth={3} name="True News KRI" />
+                        <Line type="monotone" dataKey="narrative_divergence" stroke="#8B5CF6" strokeWidth={2} strokeDasharray="5 5" name="Divergence" />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+
+
+                  <div className="bg-white rounded-lg p-6 shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4">Article Volume Distribution</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={sampleAnalysis.temporal_analysis}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="date" />
+                        <YAxis />
+                        <Tooltip />
+                        <Area type="monotone" dataKey="fake_articles" stackId="1" stroke="#EF4444" fill="#FEE2E2" name="Fake Articles" />
+                        <Area type="monotone" dataKey="true_articles" stackId="1" stroke="#10B981" fill="#DCFCE7" name="True Articles" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+
+              {analysisMode === 'subject' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-lg p-6 shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4">KRI by Subject Category</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={sampleAnalysis.subject_analysis}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="subject" angle={-45} textAnchor="end" height={100} />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="avg_fake_kri" fill="#EF4444" name="Fake News KRI" />
+                        <Bar dataKey="avg_true_kri" fill="#10B981" name="True News KRI" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+
+
+                  <div className="bg-white rounded-lg p-6 shadow-lg">
+                    <h3 className="text-lg font-semibold mb-4">Article Distribution</h3>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={sampleAnalysis.subject_analysis}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ subject, fake_count }) => `${subject}: ${fake_count}`}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="fake_count"
+                        >
+                          {sampleAnalysis.subject_analysis.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
+          {activeTab === 'patterns' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4">Detected Manipulation Patterns</h3>
+                  <div className="space-y-3">
+                    {sampleAnalysis.narrative_patterns.map((pattern, idx) => (
+                      <div key={idx} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-semibold text-gray-900">{pattern.pattern}</h4>
+                          <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                            pattern.avg_kri > 0.8 ? 'bg-red-200 text-red-800' :
+                            pattern.avg_kri > 0.6 ? 'bg-yellow-200 text-yellow-800' :
+                            'bg-blue-200 text-blue-800'
+                          }`}>
+                            KRI: {pattern.avg_kri.toFixed(3)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{pattern.description}</p>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-500">Frequency: {pattern.frequency.toLocaleString()}</span>
+                          <div className="w-24 h-2 bg-gray-200 rounded-full">
+                            <div 
+                              className="h-full bg-purple-600 rounded-full"
+                              style={{ width: `${(pattern.avg_kri * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4">Pattern Frequency Analysis</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={sampleAnalysis.narrative_patterns} layout="horizontal">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="pattern" type="category" width={120} />
+                      <Tooltip />
+                      <Bar dataKey="frequency" fill="#8B5CF6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {activeTab === 'alerts' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-red-50 to-orange-50 border border-red-200 rounded-lg p-6">
+                <div className="flex items-center mb-4">
+                  <AlertTriangle className="text-red-600 mr-3" size={24} />
+                  <div>
+                    <h3 className="text-red-800 font-semibold text-lg">Active Manipulation Alerts</h3>
+                    <p className="text-red-700 text-sm">
+                      {sampleAnalysis.manipulation_vectors.filter(v => v.strength > detectionThreshold).length} vectors above threshold detected
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+
+              <div className="grid grid-cols-1 gap-4">
+                {sampleAnalysis.manipulation_vectors
+                  .filter(vector => vector.strength > detectionThreshold)
+                  .map((vector, idx) => (
+                    <ManipulationAlert 
+                      key={idx}
+                      pattern={vector.vector}
+                      strength={vector.strength}
+                      articles={vector.articles_affected}
+                    />
+                  ))}
+              </div>
+
+
+              <div className="bg-white rounded-lg p-6 shadow-lg">
+                <h3 className="text-lg font-semibold mb-4">Manipulation Vector Analysis</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <ScatterChart data={sampleAnalysis.manipulation_vectors}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="articles_affected" name="Articles Affected" />
+                    <YAxis dataKey="strength" name="Manipulation Strength" />
+                    <Tooltip 
+                      cursor={{ strokeDasharray: '3 3' }}
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-white p-3 border border-gray-300 rounded shadow-lg">
+                              <p className="font-semibold">{data.vector}</p>
+                              <p>Strength: {(data.strength * 100).toFixed(1)}%</p>
+                              <p>Articles: {data.articles_affected.toLocaleString()}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Scatter 
+                      dataKey="strength" 
+                      fill="#8B5CF6"
+                    />
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+
+
+              <div className="bg-gray-50 rounded-lg p-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Detection Methodology</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm text-gray-700">
+                  <div>
+                    <h4 className="font-semibold mb-2">Semantic Analysis</h4>
+                    <ul className="space-y-1">
+                      <li>• TF-IDF vector comparison across articles</li>
+                      <li>• Cosine similarity drift detection</li>
+                      <li>• Contextual embedding analysis</li>
+                      <li>• Cross-reference validation</li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-2">Temporal Patterns</h4>
+                    <ul className="space-y-1">
+                      <li>• Publication timing analysis</li>
+                      <li>• Narrative synchronization detection</li>
+                      <li>• Event correlation mapping</li>
+                      <li>• Trend amplification metrics</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+export default NewsNarrativeAnalyzer;

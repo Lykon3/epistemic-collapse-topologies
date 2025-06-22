@@ -1,0 +1,355 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { LineChart, Line, AreaChart, Area, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
+import { Zap, Activity, AlertTriangle, GitBranch, Waves, Target, Brain, Cpu, Play, Pause, RotateCcw } from 'lucide-react';
+import * as d3 from 'd3';
+
+const ShockwaveEngine = () => {
+ // --- STATE MANAGEMENT ---
+ const [activeTab, setActiveTab] = useState('pulse');
+ const [selectedEvent, setSelectedEvent] = useState('nuclear_incident');
+ const [isSimulating, setIsSimulating] = useState(false);
+ const [currentPhase, setCurrentPhase] = useState(0);
+ const [simulationData, setSimulationData] = useState([]);
+ const [topologyData, setTopologyData] = useState({ nodes: [], links: [] });
+ const svgRef = useRef(null);
+ const simulationIntervalRef = useRef(null);
+ const MAX_PHASES = 50;
+
+ // --- EVENT TEMPLATES ---
+ // The initial KRI values and bloc response parameters that drive the simulation.
+ const eventTemplates = {
+   'declassification': {
+     name: 'Intelligence Declassification Drop',
+     description: 'Sudden release of classified documents implicating multiple parties',
+     initialKRI: { semantic: 0.85, sentiment: -0.72, archetype: 0.91, temporal: 0.65 },
+     blocResponses: {
+       MAGA: { delay: 0, amplification: 1.3, frameShift: 'Deep State Exposure', resonanceFreq: 0.5 },
+       Kremlin: { delay: 2, amplification: 1.1, frameShift: 'Western Corruption Proof', resonanceFreq: 0.45 },
+       Liberal: { delay: 1, amplification: 0.7, frameShift: 'Disinformation Campaign', resonanceFreq: 0.6 },
+       Western: { delay: 3, amplification: 0.8, frameShift: 'Context Required', resonanceFreq: 0.55 },
+       Neutral: { delay: 4, amplification: 0.3, frameShift: 'Developing Story', resonanceFreq: 0.4 }
+     }
+   },
+   'bioweapon': {
+     name: 'Bioweapon Lab Breach Allegation',
+     description: 'Claims of escaped pathogen from military research facility',
+     initialKRI: { semantic: 0.92, sentiment: -0.89, archetype: 0.87, temporal: 0.78 },
+     blocResponses: {
+       MAGA: { delay: 0, amplification: 1.5, frameShift: 'Gain-of-Function Vindication', resonanceFreq: 0.6 },
+       Kremlin: { delay: 1, amplification: 1.4, frameShift: 'US Biowarfare Program', resonanceFreq: 0.5 },
+       Liberal: { delay: 2, amplification: 0.4, frameShift: 'Public Health Response', resonanceFreq: 0.7 },
+       Western: { delay: 2, amplification: 0.5, frameShift: 'Accident Investigation', resonanceFreq: 0.65 },
+       Neutral: { delay: 3, amplification: 0.6, frameShift: 'Verification Pending', resonanceFreq: 0.55 }
+     }
+   },
+   'leader_collapse': {
+     name: 'High-Profile Leader Health Crisis',
+     description: 'Sudden health emergency of polarizing political figure',
+     initialKRI: { semantic: 0.78, sentiment: -0.45, archetype: 0.82, temporal: 0.92 },
+     blocResponses: {
+       MAGA: { delay: 0, amplification: 1.2, frameShift: 'Assassination Attempt', resonanceFreq: 0.4 },
+       Kremlin: { delay: 1, amplification: 0.9, frameShift: 'Western Medical Attack', resonanceFreq: 0.35 },
+       Liberal: { delay: 0, amplification: 1.0, frameShift: 'Health Privacy Concerns', resonanceFreq: 0.5 },
+       Western: { delay: 1, amplification: 0.6, frameShift: 'Medical Updates Only', resonanceFreq: 0.45 },
+       Neutral: { delay: 2, amplification: 0.4, frameShift: 'Awaiting Confirmation', resonanceFreq: 0.3 }
+     }
+   },
+   'nuclear_incident': {
+     name: 'Nuclear Facility Anomaly',
+     description: 'Unexplained radiation spike near military installation',
+     initialKRI: { semantic: 0.95, sentiment: -0.92, archetype: 0.88, temporal: 0.85 },
+     blocResponses: {
+       MAGA: { delay: 1, amplification: 1.1, frameShift: 'Foreign Sabotage', resonanceFreq: 0.7 },
+       Kremlin: { delay: 0, amplification: 1.6, frameShift: 'NATO Provocation', resonanceFreq: 0.6 },
+       Liberal: { delay: 2, amplification: 0.8, frameShift: 'Safety Protocols', resonanceFreq: 0.8 },
+       Western: { delay: 1, amplification: 0.9, frameShift: 'Technical Malfunction', resonanceFreq: 0.75 },
+       Neutral: { delay: 3, amplification: 0.5, frameShift: 'Investigation Ongoing', resonanceFreq: 0.5 }
+     }
+   },
+   'ai_sentience': {
+     name: 'AI Sentience Claim',
+     description: 'Major tech company whistleblower claims AI has achieved consciousness',
+     initialKRI: { semantic: 0.89, sentiment: -0.67, archetype: 0.94, temporal: 0.71 },
+     blocResponses: {
+       MAGA: { delay: 1, amplification: 1.4, frameShift: 'Big Tech Playing God', resonanceFreq: 0.55 },
+       Kremlin: { delay: 2, amplification: 1.2, frameShift: 'Western Hubris Exposed', resonanceFreq: 0.5 },
+       Liberal: { delay: 0, amplification: 0.9, frameShift: 'Ethics & Regulation Needed', resonanceFreq: 0.6 },
+       Western: { delay: 1, amplification: 0.7, frameShift: 'Scientific Verification Required', resonanceFreq: 0.65 },
+       Neutral: { delay: 2, amplification: 0.5, frameShift: 'Expert Analysis Pending', resonanceFreq: 0.45 }
+     }
+   },
+   'financial_collapse': {
+     name: 'Major Bank Collapse',
+     description: 'Systemic financial institution fails overnight',
+     initialKRI: { semantic: 0.86, sentiment: -0.88, archetype: 0.79, temporal: 0.94 },
+     blocResponses: {
+       MAGA: { delay: 0, amplification: 1.5, frameShift: 'Globalist System Crumbling', resonanceFreq: 0.6 },
+       Kremlin: { delay: 1, amplification: 1.3, frameShift: 'Dollar Hegemony Ending', resonanceFreq: 0.5 },
+       Liberal: { delay: 0, amplification: 1.1, frameShift: 'Regulation Failure', resonanceFreq: 0.7 },
+       Western: { delay: 1, amplification: 0.8, frameShift: 'Contained Risk', resonanceFreq: 0.65 },
+       Neutral: { delay: 2, amplification: 0.6, frameShift: 'Market Analysis', resonanceFreq: 0.55 }
+     }
+   }
+ };
+ 
+ const COLORS = { MAGA: '#DC2626', Kremlin: '#7C2D12', Liberal: '#2563EB', Western: '#059669', Neutral: '#6B7280' };
+
+ // --- SIMULATION LOGIC ---
+ const runSimulation = () => {
+   const event = eventTemplates[selectedEvent];
+   if (!event) return;
+
+   let phase = 0;
+   const data = [];
+   
+   // Clear previous interval if any
+   if(simulationIntervalRef.current) clearInterval(simulationIntervalRef.current);
+
+   simulationIntervalRef.current = setInterval(() => {
+     if (phase > MAX_PHASES) {
+       clearInterval(simulationIntervalRef.current);
+       setIsSimulating(false);
+       return;
+     }
+
+     const phaseData = { phase };
+     const currentNodes = [];
+
+     Object.entries(event.blocResponses).forEach(([bloc, params]) => {
+       const { delay, amplification, resonanceFreq } = params;
+       const effectivePhase = phase - delay;
+       let amplitude = 0;
+       if (effectivePhase >= 0) {
+         // Physics: Amplified signal with exponential decay and sinusoidal oscillation + noise
+         const decay = Math.exp(-0.08 * effectivePhase);
+         const oscillation = Math.sin(resonanceFreq * effectivePhase);
+         const noise = (Math.random() - 0.5) * 0.1;
+         amplitude = amplification * decay * Math.abs(oscillation) + noise;
+       }
+       phaseData[bloc] = Math.max(0, amplitude); // Ensure amplitude is not negative
+       currentNodes.push({ id: bloc, amplitude: phaseData[bloc], frame: params.frameShift });
+     });
+
+     setSimulationData(prev => [...prev.slice(-MAX_PHASES), phaseData]);
+     
+     // Update topology data
+     const links = [];
+     for(let i = 0; i < currentNodes.length; i++) {
+       for(let j = i + 1; j < currentNodes.length; j++) {
+           // Simple frame similarity for link strength
+           const similarity = currentNodes[i].frame.split(' ')[0] === currentNodes[j].frame.split(' ')[0] ? 0.7 : 0.1;
+           links.push({ source: currentNodes[i].id, target: currentNodes[j].id, similarity });
+       }
+     }
+     setTopologyData({ nodes: currentNodes, links });
+     
+     setCurrentPhase(phase);
+     phase++;
+   }, 200);
+ };
+
+ const handleStartStop = () => {
+   if (isSimulating) {
+     clearInterval(simulationIntervalRef.current);
+     setIsSimulating(false);
+   } else {
+     setSimulationData([]);
+     setCurrentPhase(0);
+     setIsSimulating(true);
+     runSimulation();
+   }
+ };
+
+ const handleReset = () => {
+   clearInterval(simulationIntervalRef.current);
+   setIsSimulating(false);
+   setCurrentPhase(0);
+   setSimulationData([]);
+   setTopologyData({ nodes: [], links: [] });
+ };
+ 
+ useEffect(() => {
+   // Cleanup interval on component unmount
+   return () => clearInterval(simulationIntervalRef.current);
+ }, []);
+
+ // --- UI COMPONENTS ---
+ const PulseChart = () => (
+   <ResponsiveContainer width="100%" height={300}>
+     <AreaChart data={simulationData}>
+       <CartesianGrid strokeDasharray="3 3" />
+       <XAxis dataKey="phase" label={{ value: 'Simulation Phase (T)', position: 'insideBottom', offset: -5 }}/>
+       <YAxis label={{ value: 'KRI Amplitude', angle: -90, position: 'insideLeft' }} domain={[0, 'dataMax + 0.2']}/>
+       <Tooltip contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.9)', border: 'none' }}/>
+       <Legend />
+       {Object.keys(eventTemplates[selectedEvent]?.blocResponses || {}).map(bloc => (
+         <Area key={bloc} type="monotone" dataKey={bloc} stroke={COLORS[bloc]} fill={COLORS[bloc]} fillOpacity={0.2} strokeWidth={2}/>
+       ))}
+     </AreaChart>
+   </ResponsiveContainer>
+ );
+
+ const ResponseProfile = () => {
+   const event = eventTemplates[selectedEvent];
+   if (!event) return null;
+   const data = Object.entries(event.initialKRI).map(([key, value]) => ({
+     metric: key.charAt(0).toUpperCase() + key.slice(1),
+     value: Math.abs(value)
+   }));
+
+   return (
+     <ResponsiveContainer width="100%" height={300}>
+       <RadarChart data={data}>
+         <PolarGrid />
+         <PolarAngleAxis dataKey="metric" />
+         <PolarRadiusAxis domain={[0, 1]}/>
+         <Radar name={event.name} dataKey="value" stroke="#8B5CF6" fill="#8B5CF6" fillOpacity={0.6} />
+         <Tooltip />
+       </RadarChart>
+     </ResponsiveContainer>
+   );
+ };
+
+ const NarrativeTopology = () => {
+   useEffect(() => {
+     if (!svgRef.current || topologyData.nodes.length === 0) return;
+
+     const width = svgRef.current.clientWidth;
+     const height = svgRef.current.clientHeight;
+
+     const svg = d3.select(svgRef.current);
+     svg.selectAll("*").remove(); // Clear previous render
+
+     const simulation = d3.forceSimulation(topologyData.nodes)
+       .force("link", d3.forceLink(topologyData.links).id(d => d.id).strength(d => d.similarity * 0.5))
+       .force("charge", d3.forceManyBody().strength(-200))
+       .force("center", d3.forceCenter(width / 2, height / 2));
+
+     const link = svg.append("g")
+       .selectAll("line")
+       .data(topologyData.links)
+       .join("line")
+       .style("stroke", "#9ca3af")
+       .style("stroke-opacity", d => d.similarity);
+
+     const node = svg.append("g")
+       .selectAll("g")
+       .data(topologyData.nodes)
+       .join("g")
+       .call(d3.drag()
+             .on("start", (event, d) => {
+                 if (!event.active) simulation.alphaTarget(0.3).restart();
+                 d.fx = d.x;
+                 d.fy = d.y;
+             })
+             .on("drag", (event, d) => {
+                 d.fx = event.x;
+                 d.fy = event.y;
+             })
+             .on("end", (event, d) => {
+                 if (!event.active) simulation.alphaTarget(0);
+                 d.fx = null;
+                 d.fy = null;
+             }));
+
+     node.append("circle")
+       .attr("r", d => 10 + d.amplitude * 40) // Size based on amplitude
+       .style("fill", d => COLORS[d.id])
+       .style("stroke", "#fff")
+       .style("stroke-width", 1.5);
+     
+     node.append("text")
+       .text(d => d.id)
+       .attr("x", 0)
+       .attr("y", 4)
+       .style("text-anchor", "middle")
+       .style("fill", "#fff")
+       .style("font-size", "10px")
+       .style("pointer-events", "none");
+
+     simulation.on("tick", () => {
+       link
+         .attr("x1", d => d.source.x)
+         .attr("y1", d => d.source.y)
+         .attr("x2", d => d.target.x)
+         .attr("y2", d => d.target.y);
+
+       node.attr("transform", d => `translate(${d.x}, ${d.y})`);
+     });
+
+   }, [topologyData]);
+
+   return (
+       <div className='w-full h-[400px] bg-slate-800 rounded-lg'>
+           <svg ref={svgRef} className="w-full h-full"></svg>
+       </div>
+   );
+ };
+ 
+ // --- MAIN RENDER ---
+ return (
+   <div className="min-h-screen bg-gray-900 text-white p-4 font-sans">
+     <div className="max-w-7xl mx-auto">
+       <header className="mb-6">
+         <h1 className="text-3xl font-bold text-purple-400 flex items-center"><Waves className="mr-3"/>Kompromat Shockwave Engine</h1>
+         <p className="text-gray-400 mt-1">Forecasting narrative bifurcation and resonance from shock events.</p>
+       </header>
+
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+         {/* Controls */}
+         <div className="lg:col-span-1 bg-slate-800 p-4 rounded-lg shadow-lg">
+           <h2 className="text-xl font-semibold mb-4 border-b border-slate-700 pb-2">Simulation Control</h2>
+           <div className="space-y-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-300 mb-1">Select Shock Event</label>
+               <select value={selectedEvent} onChange={e => { handleReset(); setSelectedEvent(e.target.value); }} className="w-full p-2 bg-slate-700 border border-slate-600 rounded-md">
+                 {Object.entries(eventTemplates).map(([key, event]) => (
+                   <option key={key} value={key}>{event.name}</option>
+                 ))}
+               </select>
+             </div>
+             <div className="text-xs text-gray-400 bg-slate-700/50 p-3 rounded-md">
+                 {eventTemplates[selectedEvent]?.description}
+             </div>
+             <div className="flex space-x-2">
+               <button onClick={handleStartStop} className={`w-full flex items-center justify-center p-2 rounded-md text-white font-semibold ${isSimulating ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'}`}>
+                 {isSimulating ? <Pause size={16} className="mr-2"/> : <Play size={16} className="mr-2"/>}
+                 {isSimulating ? 'Pause' : 'Start'}
+               </button>
+               <button onClick={handleReset} className="w-full flex items-center justify-center p-2 bg-red-500 hover:bg-red-600 rounded-md text-white font-semibold">
+                 <RotateCcw size={16} className="mr-2"/>Reset
+               </button>
+             </div>
+             {isSimulating && <div className="text-center text-purple-400 animate-pulse">Simulating Phase: {currentPhase}</div>}
+           </div>
+         </div>
+
+         {/* Visualizations */}
+         <div className="lg:col-span-2 bg-slate-800 p-4 rounded-lg shadow-lg">
+           <div className="border-b border-slate-700 mb-4">
+               <nav className="flex space-x-4">
+                 {[
+                   { id: 'pulse', label: 'Resonance Pulse', icon: Activity },
+                   { id: 'topology', label: 'Narrative Topology', icon: GitBranch },
+                   { id: 'response', label: 'Initial Response', icon: Zap },
+                 ].map(({id, label, icon: Icon}) => (
+                     <button key={id} onClick={() => setActiveTab(id)} className={`flex items-center space-x-2 py-2 px-3 rounded-t-md text-sm font-medium ${activeTab === id ? 'bg-slate-700 text-purple-400' : 'text-gray-400 hover:bg-slate-700/50'}`}>
+                         <Icon size={16}/>
+                         <span>{label}</span>
+                     </button>
+                 ))}
+               </nav>
+           </div>
+           <div>
+             {activeTab === 'pulse' && <PulseChart />}
+             {activeTab === 'topology' && <NarrativeTopology />}
+             {activeTab === 'response' && <ResponseProfile />}
+           </div>
+         </div>
+       </div>
+     </div>
+   </div>
+ );
+};
+
+export default ShockwaveEngine;

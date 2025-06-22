@@ -1,0 +1,621 @@
+﻿import React, { useState, useEffect, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ScatterChart, Scatter, AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis } from 'recharts';
+import { Brain, Shield, AlertTriangle, Zap, TrendingUp, Activity, Eye, Target, Globe, Languages, GitBranch, Compass, Layers, Network } from 'lucide-react';
+
+
+const CrossLingualKompromatEngine = () => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [selectedEvent, setSelectedEvent] = useState('ukraine_conflict');
+  const [timeRange, setTimeRange] = useState('6months');
+  const [divergenceThreshold, setDivergenceThreshold] = useState(0.6);
+  const [languagePair, setLanguagePair] = useState('en-ru');
+
+
+  // Sample data representing cross-lingual narrative analysis
+  const geopoliticalEvents = {
+    ukraine_conflict: {
+      name: "Ukraine Conflict Coverage",
+      period: "2022-2024",
+      western_sources: ["BBC", "CNN", "Reuters", "Le Monde", "Der Spiegel"],
+      brics_sources: ["RT", "Xinhua", "TASS", "Folha", "Al Jazeera"],
+      narrative_divergence: [
+        { 
+          date: '2022-02', 
+          western_kri: 0.23, 
+          brics_kri: 0.67, 
+          divergence_delta: 0.44,
+          semantic_drift: 0.78,
+          sentiment_inversion: 0.82,
+          archetype_shift: 0.71,
+          event: 'Conflict initiation'
+        },
+        { 
+          date: '2022-04', 
+          western_kri: 0.28, 
+          brics_kri: 0.73, 
+          divergence_delta: 0.45,
+          semantic_drift: 0.81,
+          sentiment_inversion: 0.85,
+          archetype_shift: 0.74,
+          event: 'Bucha reports'
+        },
+        { 
+          date: '2022-06', 
+          western_kri: 0.31, 
+          brics_kri: 0.79, 
+          divergence_delta: 0.48,
+          semantic_drift: 0.83,
+          sentiment_inversion: 0.87,
+          archetype_shift: 0.76,
+          event: 'Grain corridor'
+        },
+        { 
+          date: '2022-09', 
+          western_kri: 0.26, 
+          brics_kri: 0.84, 
+          divergence_delta: 0.58,
+          semantic_drift: 0.89,
+          sentiment_inversion: 0.91,
+          archetype_shift: 0.82,
+          event: 'Mobilization announced'
+        },
+        { 
+          date: '2023-02', 
+          western_kri: 0.29, 
+          brics_kri: 0.81, 
+          divergence_delta: 0.52,
+          semantic_drift: 0.85,
+          sentiment_inversion: 0.88,
+          archetype_shift: 0.78,
+          event: 'Anniversary coverage'
+        },
+        { 
+          date: '2023-06', 
+          western_kri: 0.32, 
+          brics_kri: 0.86, 
+          divergence_delta: 0.54,
+          semantic_drift: 0.87,
+          sentiment_inversion: 0.89,
+          archetype_shift: 0.81,
+          event: 'Wagner events'
+        }
+      ]
+    },
+    climate_summit: {
+      name: "Climate Summit Coverage",
+      period: "2023",
+      narrative_divergence: [
+        { date: '2023-10', western_kri: 0.19, brics_kri: 0.52, divergence_delta: 0.33, semantic_drift: 0.45, sentiment_inversion: 0.38, archetype_shift: 0.41 },
+        { date: '2023-11', western_kri: 0.22, brics_kri: 0.58, divergence_delta: 0.36, semantic_drift: 0.48, sentiment_inversion: 0.42, archetype_shift: 0.44 },
+        { date: '2023-12', western_kri: 0.25, brics_kri: 0.61, divergence_delta: 0.36, semantic_drift: 0.51, sentiment_inversion: 0.45, archetype_shift: 0.47 }
+      ]
+    },
+    economic_sanctions: {
+      name: "Economic Sanctions Coverage",
+      period: "2022-2024",
+      narrative_divergence: [
+        { date: '2022-03', western_kri: 0.21, brics_kri: 0.74, divergence_delta: 0.53, semantic_drift: 0.79, sentiment_inversion: 0.83, archetype_shift: 0.69 },
+        { date: '2022-06', western_kri: 0.24, brics_kri: 0.78, divergence_delta: 0.54, semantic_drift: 0.82, sentiment_inversion: 0.85, archetype_shift: 0.72 },
+        { date: '2022-09', western_kri: 0.27, brics_kri: 0.81, divergence_delta: 0.54, semantic_drift: 0.84, sentiment_inversion: 0.87, archetype_shift: 0.74 }
+      ]
+    }
+  };
+
+
+  const languageEcosystems = {
+    western: {
+      languages: ['English', 'French', 'German', 'Spanish', 'Italian'],
+      archetypal_frames: ['Democratic Defender', 'Rules-Based Order', 'Human Rights Advocate', 'Market Liberal'],
+      dominant_narratives: ['Freedom vs Authoritarianism', 'Rule of Law', 'Individual Rights', 'Open Society'],
+      avg_baseline_kri: 0.24
+    },
+    brics: {
+      languages: ['Russian', 'Chinese', 'Hindi', 'Portuguese (BR)', 'Arabic'],
+      archetypal_frames: ['Multipolar Advocate', 'Sovereignty Defender', 'Development Partner', 'Anti-Hegemonic'],
+      dominant_narratives: ['Multipolarity vs Unipolarity', 'Sovereignty Rights', 'Development Justice', 'Civilizational Plurality'],
+      avg_baseline_kri: 0.71
+    }
+  };
+
+
+  const manipulationPatterns = {
+    western_specific: [
+      { pattern: 'Moral Universalism', frequency: 847, strength: 0.73, description: 'Framing local values as universal principles' },
+      { pattern: 'Democratic Legitimacy Anchoring', frequency: 623, strength: 0.68, description: 'Using democratic procedures to justify actions' },
+      { pattern: 'Human Rights Instrumentalization', frequency: 534, strength: 0.71, description: 'Selective application of rights discourse' },
+      { pattern: 'Market Logic Extension', frequency: 412, strength: 0.66, description: 'Applying economic reasoning to political issues' }
+    ],
+    brics_specific: [
+      { pattern: 'Sovereignty Maximalism', frequency: 923, strength: 0.79, description: 'Absolute sovereignty as overriding principle' },
+      { pattern: 'Historical Grievance Activation', frequency: 712, strength: 0.82, description: 'Invoking colonial/imperial injustices' },
+      { pattern: 'Civilizational Exceptionalism', frequency: 645, strength: 0.77, description: 'Unique cultural/historical circumstances' },
+      { pattern: 'Development Priority Framing', frequency: 578, strength: 0.74, description: 'Economic development over other considerations' }
+    ]
+  };
+
+
+  const narrativeBifurcationPoints = [
+    { 
+      event: 'COVID-19 Origins', 
+      date: '2020-04', 
+      western_frame: 'Lab Leak Investigation', 
+      brics_frame: 'Anti-Asian Scapegoating',
+      divergence_velocity: 0.73,
+      irreversibility_score: 0.81
+    },
+    { 
+      event: 'Afghanistan Withdrawal', 
+      date: '2021-08', 
+      western_frame: 'Strategic Reorientation', 
+      brics_frame: 'Imperial Decline',
+      divergence_velocity: 0.68,
+      irreversibility_score: 0.74
+    },
+    { 
+      event: 'Russia-Ukraine Conflict', 
+      date: '2022-02', 
+      western_frame: 'Unprovoked Aggression', 
+      brics_frame: 'Proxy Confrontation',
+      divergence_velocity: 0.89,
+      irreversibility_score: 0.94
+    },
+    { 
+      event: 'Taiwan Tensions', 
+      date: '2022-08', 
+      western_frame: 'Democratic Defense', 
+      brics_frame: 'Reunification Rights',
+      divergence_velocity: 0.76,
+      irreversibility_score: 0.79
+    }
+  ];
+
+
+  const currentData = geopoliticalEvents[selectedEvent];
+
+
+  const COLORS = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#06B6D4'];
+
+
+  const MetricCard = ({ title, value, subtitle, icon: Icon, color, comparison }) => (
+    <div className="bg-white rounded-lg p-6 shadow-lg border-l-4" style={{ borderLeftColor: color }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-medium text-gray-600 mb-1">{title}</h3>
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+          {comparison && (
+            <div className="mt-2 flex items-center space-x-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+              <span className="text-xs text-gray-500">Western: {comparison.western}</span>
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <span className="text-xs text-gray-500">BRICS: {comparison.brics}</span>
+            </div>
+          )}
+        </div>
+        <Icon size={24} style={{ color }} />
+      </div>
+    </div>
+  );
+
+
+  const EpistemicDivergenceMap = () => {
+    const mapData = currentData.narrative_divergence.map((point, index) => ({
+      x: point.semantic_drift,
+      y: point.sentiment_inversion,
+      z: point.divergence_delta,
+      date: point.date,
+      event: point.event,
+      size: point.divergence_delta * 100,
+      western_reality: point.western_kri,
+      brics_reality: point.brics_kri
+    }));
+
+
+    return (
+      <div className="bg-white rounded-lg p-6 shadow-lg">
+        <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <Network className="mr-2 text-purple-600" size={20} />
+          Epistemic Divergence Topology
+        </h3>
+        <ResponsiveContainer width="100%" height={350}>
+          <ScatterChart data={mapData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis 
+              dataKey="x" 
+              name="Semantic Drift" 
+              label={{ value: 'Semantic Drift', position: 'insideBottom', offset: -5 }}
+            />
+            <YAxis 
+              dataKey="y" 
+              name="Sentiment Inversion" 
+              label={{ value: 'Sentiment Inversion', angle: -90, position: 'insideLeft' }}
+            />
+            <Tooltip 
+              content={({ active, payload }) => {
+                if (active && payload && payload.length) {
+                  const data = payload[0].payload;
+                  return (
+                    <div className="bg-white p-4 border border-gray-300 rounded shadow-lg">
+                      <p className="font-semibold text-purple-900">{data.date}</p>
+                      <p className="text-sm text-gray-600">{data.event}</p>
+                      <div className="mt-2 space-y-1 text-xs">
+                        <p>Divergence Δ: <span className="font-bold">{data.z.toFixed(3)}</span></p>
+                        <p>Western Reality: <span className="font-bold text-blue-600">{data.western_reality.toFixed(3)}</span></p>
+                        <p>BRICS Reality: <span className="font-bold text-red-600">{data.brics_reality.toFixed(3)}</span></p>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              }}
+            />
+            <Scatter 
+              dataKey="z" 
+              fill="#8B5CF6"
+              fillOpacity={0.7}
+            />
+          </ScatterChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+
+  const BifurcationTimeline = () => (
+    <div className="bg-white rounded-lg p-6 shadow-lg">
+      <h3 className="text-lg font-semibold mb-4 flex items-center">
+        <GitBranch className="mr-2 text-orange-600" size={20} />
+        Narrative Bifurcation Events
+      </h3>
+      <div className="space-y-4">
+        {narrativeBifurcationPoints.map((point, idx) => (
+          <div key={idx} className="border-l-4 border-orange-500 pl-4 py-2">
+            <div className="flex justify-between items-start">
+              <div className="flex-1">
+                <h4 className="font-semibold text-gray-900">{point.event}</h4>
+                <p className="text-sm text-gray-600 mt-1">{point.date}</p>
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <div className="bg-blue-50 p-2 rounded">
+                    <span className="font-semibold text-blue-800">Western Frame:</span>
+                    <p className="text-blue-700">{point.western_frame}</p>
+                  </div>
+                  <div className="bg-red-50 p-2 rounded">
+                    <span className="font-semibold text-red-800">BRICS Frame:</span>
+                    <p className="text-red-700">{point.brics_frame}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="ml-4 text-right">
+                <div className="text-sm">
+                  <div className="font-semibold">Irreversibility</div>
+                  <div className={`text-lg font-bold ${
+                    point.irreversibility_score > 0.8 ? 'text-red-600' :
+                    point.irreversibility_score > 0.6 ? 'text-yellow-600' :
+                    'text-green-600'
+                  }`}>
+                    {(point.irreversibility_score * 100).toFixed(0)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+
+  const ArchetypalRadar = () => {
+    const radarData = [
+      { frame: 'Authority Legitimacy', western: 0.85, brics: 0.34 },
+      { frame: 'Individual Rights', western: 0.92, brics: 0.41 },
+      { frame: 'Collective Harmony', western: 0.38, brics: 0.87 },
+      { frame: 'Historical Justice', western: 0.42, brics: 0.91 },
+      { frame: 'Economic Development', western: 0.67, brics: 0.89 },
+      { frame: 'Cultural Sovereignty', western: 0.29, brics: 0.93 }
+    ];
+
+
+    return (
+      <div className="bg-white rounded-lg p-6 shadow-lg">
+        <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <Compass className="mr-2 text-blue-600" size={20} />
+          Archetypal Frame Comparison
+        </h3>
+        <ResponsiveContainer width="100%" height={300}>
+          <RadarChart data={radarData}>
+            <PolarGrid />
+            <PolarAngleAxis dataKey="frame" tick={{ fontSize: 12 }} />
+            <PolarRadiusAxis domain={[0, 1]} tick={{ fontSize: 10 }} />
+            <Radar 
+              name="Western Media" 
+              dataKey="western" 
+              stroke="#3B82F6" 
+              fill="#3B82F6" 
+              fillOpacity={0.3}
+              strokeWidth={2}
+            />
+            <Radar 
+              name="BRICS Media" 
+              dataKey="brics" 
+              stroke="#EF4444" 
+              fill="#EF4444" 
+              fillOpacity={0.3}
+              strokeWidth={2}
+            />
+            <Legend />
+          </RadarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  };
+
+
+  return (
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-lg shadow-lg mb-6 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 flex items-center">
+                <Globe className="mr-3 text-purple-600" size={32} />
+                Cross-Lingual Narrative Divergence Engine
+              </h1>
+              <p className="text-gray-600 mt-2">
+                Mapping civilizational epistemology through cross-bloc narrative topology analysis
+              </p>
+            </div>
+            <div className="flex items-center space-x-4">
+              <select 
+                value={selectedEvent} 
+                onChange={(e) => setSelectedEvent(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="ukraine_conflict">Ukraine Conflict</option>
+                <option value="climate_summit">Climate Summit</option>
+                <option value="economic_sanctions">Economic Sanctions</option>
+              </select>
+              <select 
+                value={languagePair} 
+                onChange={(e) => setLanguagePair(e.target.value)}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="en-ru">English ↔ Russian</option>
+                <option value="en-zh">English ↔ Chinese</option>
+                <option value="fr-ar">French ↔ Arabic</option>
+                <option value="de-hi">German ↔ Hindi</option>
+              </select>
+              <input
+                type="range"
+                min="0.3"
+                max="1.0"
+                step="0.05"
+                value={divergenceThreshold}
+                onChange={(e) => setDivergenceThreshold(parseFloat(e.target.value))}
+                className="w-32"
+              />
+              <span className="text-sm text-gray-600">
+                Δ: {divergenceThreshold.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+
+          <div className="border-b border-gray-200 mb-6">
+            <nav className="-mb-px flex space-x-8">
+              {[
+                { id: 'overview', label: 'Divergence Overview', icon: Eye },
+                { id: 'topology', label: 'Epistemic Topology', icon: Network },
+                { id: 'patterns', label: 'Manipulation Patterns', icon: Target },
+                { id: 'bifurcation', label: 'Reality Bifurcation', icon: GitBranch },
+                { id: 'archetypal', label: 'Archetypal Analysis', icon: Compass }
+              ].map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => setActiveTab(id)}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                    activeTab === id
+                      ? 'border-purple-500 text-purple-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  <Icon size={16} className="mr-2" />
+                  {label}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <MetricCard
+                  title="Narrative Divergence Δ"
+                  value={currentData.narrative_divergence[currentData.narrative_divergence.length - 1].divergence_delta.toFixed(3)}
+                  subtitle="Cross-bloc reality gap"
+                  icon={GitBranch}
+                  color="#8B5CF6"
+                  comparison={{
+                    western: currentData.narrative_divergence[currentData.narrative_divergence.length - 1].western_kri.toFixed(3),
+                    brics: currentData.narrative_divergence[currentData.narrative_divergence.length - 1].brics_kri.toFixed(3)
+                  }}
+                />
+                <MetricCard
+                  title="Semantic Drift Velocity"
+                  value={currentData.narrative_divergence[currentData.narrative_divergence.length - 1].semantic_drift.toFixed(3)}
+                  subtitle="Meaning space separation"
+                  icon={Zap}
+                  color="#EF4444"
+                />
+                <MetricCard
+                  title="Archetype Shift Index"
+                  value={currentData.narrative_divergence[currentData.narrative_divergence.length - 1].archetype_shift.toFixed(3)}
+                  subtitle="Role inversion magnitude"
+                  icon={Shield}
+                  color="#F59E0B"
+                />
+                <MetricCard
+                  title="Epistemic Synchrony"
+                  value="0.127"
+                  subtitle="Cross-bloc correlation"
+                  icon={Activity}
+                  color="#10B981"
+                />
+              </div>
+
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4">Cross-Bloc KRI Trajectories</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={currentData.narrative_divergence}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="western_kri" 
+                        stroke="#3B82F6" 
+                        strokeWidth={3} 
+                        name="Western Media KRI" 
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="brics_kri" 
+                        stroke="#EF4444" 
+                        strokeWidth={3} 
+                        name="BRICS Media KRI" 
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="divergence_delta" 
+                        stroke="#8B5CF6" 
+                        strokeWidth={2} 
+                        strokeDasharray="5 5" 
+                        name="Divergence Δ" 
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4">Manipulation Component Analysis</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <AreaChart data={currentData.narrative_divergence}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis />
+                      <Tooltip />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="semantic_drift" 
+                        stackId="1" 
+                        stroke="#8B5CF6" 
+                        fill="#DDD6FE" 
+                        name="Semantic Drift" 
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="sentiment_inversion" 
+                        stackId="1" 
+                        stroke="#EF4444" 
+                        fill="#FEE2E2" 
+                        name="Sentiment Inversion" 
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="archetype_shift" 
+                        stackId="1" 
+                        stroke="#F59E0B" 
+                        fill="#FEF3C7" 
+                        name="Archetype Shift" 
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          )}
+
+
+          {activeTab === 'topology' && (
+            <div className="space-y-6">
+              <EpistemicDivergenceMap />
+              <ArchetypalRadar />
+            </div>
+          )}
+
+
+          {activeTab === 'patterns' && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <div className="w-4 h-4 bg-blue-500 rounded mr-2"></div>
+                    Western Media Manipulation Patterns
+                  </h3>
+                  <div className="space-y-3">
+                    {manipulationPatterns.western_specific.map((pattern, idx) => (
+                      <div key={idx} className="border-l-4 border-blue-500 pl-4 py-2 bg-blue-50">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-semibold text-blue-900">{pattern.pattern}</h4>
+                          <span className="text-sm font-bold text-blue-700">
+                            {(pattern.strength * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <p className="text-sm text-blue-800 mt-1">{pattern.description}</p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          Frequency: {pattern.frequency} instances
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+
+                <div className="bg-white rounded-lg p-6 shadow-lg">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center">
+                    <div className="w-4 h-4 bg-red-500 rounded mr-2"></div>
+                    BRICS Media Manipulation Patterns
+                  </h3>
+                  <div className="space-y-3">
+                    {manipulationPatterns.brics_specific.map((pattern, idx) => (
+                      <div key={idx} className="border-l-4 border-red-500 pl-4 py-2 bg-red-50">
+                        <div className="flex justify-between items-center">
+                          <h4 className="font-semibold text-red-900">{pattern.pattern}</h4>
+                          <span className="text-sm font-bold text-red-700">
+                            {(pattern.strength * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                        <p className="text-sm text-red-800 mt-1">{pattern.description}</p>
+                        <p className="text-xs text-red-600 mt-1">
+                          Frequency: {pattern.frequency} instances
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-200">
+                <h3 className="text-lg font-semibold text-purple-900 mb-4">
+                  Cross-Linguistic Pattern Symmetries
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div className="bg-white rounded p-4">
+                    <h4 className="font-semibold text-purple-700 mb-2">Semantic Mirroring</h4>
+                    <p className="text-gray-600">Identical manipulation techniques applied to opposite semantic content across language pairs.</p>
+                  </div>
+                  <div className="bg-white rounded p-4">
+                    <h4 className="font-semibold text-purple-700 mb-2">Temporal Synchrony</h4>
+                    <p className="text-gray-600">Coordinated narrative shifts occurring simultaneously across different language ecosystems.</p>
+                  </div>
+                  <div className="bg-white rounded p-4">
+                    <h4 className="font-semibold text-purple-700 mb-2">Archetypal Inversion</h4>
+                    <p className="text-gray-600">Systematic role reversals where heroes become vill

@@ -1,0 +1,180 @@
+﻿import React, { useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import { Shield, ShieldAlert, ShieldCheck, Link, Zap, GitBranch, ArrowRight, TrendingUp, Loader2 } from 'lucide-react';
+
+// --- MOCK ANALYSIS DATA ---
+// This simulates the backend analysis for different types of articles.
+const mockAnalyses = {
+ disinfo: {
+   risk: 'High',
+   riskColor: 'bg-red-500',
+   riskIcon: <ShieldAlert className="w-8 h-8"/>,
+   title: "Shadow Cabal Behind Global Financial Reset, Leaked Memo Allegedly Shows",
+   velocity: { rating: 'High Velocity, Low Variance', warning: 'Possible Coordinated Disinfo Surge', color: 'text-red-400' },
+   velocityData: [{t:0,v:0},{t:1,v:0.1},{t:2,v:0.4},{t:3,v:0.9},{t:4,v:0.85}],
+   framing: {
+     detectedFrame: 'Globalist Collapse',
+     ancestry: ['Kremlin "Dollar Hegemony" meme (Q2 2024)', 'MAGA "Financial Reset" theories'],
+   },
+   pulse: [
+     { bloc: 'MAGA', amplifiedAt: 'T+1hr', frame: 'Vindication' },
+     { bloc: 'Kremlin', amplifiedAt: 'T+3hr', frame: 'Western Decay' },
+     { bloc: 'Neutral', amplifiedAt: 'T+12hr', frame: 'Unverified Claims' }
+   ]
+ },
+ neutral: {
+   risk: 'Low',
+   riskColor: 'bg-green-500',
+   riskIcon: <ShieldCheck className="w-8 h-8"/>,
+   title: "Central Bank Announces Quarterly Inflation Adjustments",
+   velocity: { rating: 'Organic Spread', warning: 'Normal Information Dispersal', color: 'text-green-400' },
+   velocityData: [{t:0,v:0},{t:1,v:0.1},{t:2,v:0.15},{t:3,v:0.2},{t:4,v:0.22}],
+   framing: {
+     detectedFrame: 'Economic Reporting',
+     ancestry: ['Standard financial news cycles'],
+   },
+   pulse: [
+     { bloc: 'Neutral', amplifiedAt: 'T+0hr', frame: 'Factual Reporting' },
+     { bloc: 'Western', amplifiedAt: 'T+2hr', frame: 'Market Analysis' },
+   ]
+ },
+ complex: {
+   risk: 'Moderate',
+   riskColor: 'bg-yellow-500',
+   riskIcon: <Shield className="w-8 h-8"/>,
+   title: "Whistleblower Alleges Safety Lapses at Nuclear Facility; Officials Deny Immediate Danger",
+   velocity: { rating: 'Contested Velocity', warning: 'Competing Narratives Detected', color: 'text-yellow-400' },
+   velocityData: [{t:0,v:0},{t:1,v:0.4},{t:2,v:0.3},{t:3,v:0.6},{t:4,v:0.5}],
+   framing: {
+     detectedFrame: 'Safety vs. Sabotage',
+     ancestry: ['Standard industrial safety concerns', 'Kremlin "NATO Provocation" frame (spin-off)'],
+   },
+   pulse: [
+     { bloc: 'Liberal', amplifiedAt: 'T+1hr', frame: 'Regulation Needed' },
+     { bloc: 'MAGA', amplifiedAt: 'T+4hr', frame: 'Foreign Sabotage?' },
+     { bloc: 'Western', amplifiedAt: 'T+6hr', frame: 'Official Denial' },
+   ]
+ }
+};
+
+
+const NarrativePreflightScanner = () => {
+ const [url, setUrl] = useState('');
+ const [status, setStatus] = useState('idle'); // idle, scanning, analyzed
+ const [analysis, setAnalysis] = useState(null);
+
+ const handleScan = () => {
+   if (!url) return;
+   setStatus('scanning');
+   setAnalysis(null);
+
+   // Simulate API call and analysis
+   setTimeout(() => {
+     // Randomly pick a mock analysis type
+     const analysisTypes = Object.keys(mockAnalyses);
+     const randomType = analysisTypes[Math.floor(Math.random() * analysisTypes.length)];
+     setAnalysis(mockAnalyses[randomType]);
+     setStatus('analyzed');
+   }, 2500);
+ };
+
+ const AnalysisReport = ({ data }) => (
+   <div className="bg-slate-800 rounded-lg p-4 md:p-6 mt-6 animate-fade-in space-y-6">
+     
+     {/* 1. Overall Risk Assessment */}
+     <div className={`flex items-center p-4 rounded-lg ${data.riskColor}`}>
+       <div className="flex-shrink-0 text-white">{data.riskIcon}</div>
+       <div className="ml-4">
+         <h2 className="text-xl font-bold text-white">Risk: {data.risk}</h2>
+         <p className="text-sm text-white/80">{data.title}</p>
+       </div>
+     </div>
+
+     {/* 2. Narrative Velocity Signature */}
+     <div className="bg-slate-700/50 p-4 rounded-lg">
+       <h3 className="font-semibold flex items-center mb-2"><TrendingUp className="mr-2"/>Narrative Velocity</h3>
+       <p className={`text-lg font-bold ${data.velocity.color}`}>{data.velocity.rating}</p>
+       <p className="text-sm text-slate-400 mb-4">{data.velocity.warning}</p>
+       <ResponsiveContainer width="100%" height={100}>
+         <AreaChart data={data.velocityData}>
+           <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none' }}/>
+           <Area type="monotone" dataKey="v" stroke={data.velocity.color.replace('text','stroke')} fill={data.velocity.color.replace('text','fill')} fillOpacity={0.2}/>
+         </AreaChart>
+       </ResponsiveContainer>
+     </div>
+     
+     {/* 3. Framing & Archetype Analysis */}
+     <div className="bg-slate-700/50 p-4 rounded-lg">
+       <h3 className="font-semibold flex items-center mb-3"><GitBranch className="mr-2"/>Framing & Ancestry</h3>
+       <div className="mb-2">
+           <p className="text-sm text-slate-400">Detected Frame</p>
+           <p className="font-bold text-purple-400">{data.framing.detectedFrame}</p>
+       </div>
+       <div>
+           <p className="text-sm text-slate-400">Potential Narrative Ancestry</p>
+           <ul className="list-disc list-inside text-sm text-slate-300 mt-1">
+               {data.framing.ancestry.map((line, i) => <li key={i}>{line}</li>)}
+           </ul>
+       </div>
+     </div>
+
+     {/* 4. KRI Pulse Summary */}
+     <div className="bg-slate-700/50 p-4 rounded-lg">
+       <h3 className="font-semibold flex items-center mb-3"><Zap className="mr-2"/>Bloc Amplification Pulse</h3>
+       <div className="space-y-3">
+         {data.pulse.map((p, i) => (
+           <div key={i} className="flex items-center text-sm">
+             <span className="font-bold text-slate-400 w-16">{p.amplifiedAt}</span>
+             <span className={`font-semibold px-2 py-0.5 rounded text-xs text-white bg-opacity-80`} style={{ backgroundColor: {MAGA: '#DC2626', Kremlin: '#7C2D12', Liberal: '#2563EB', Western: '#059669', Neutral: '#6B7280'}[p.bloc] }}>
+               {p.bloc}
+             </span>
+             <ArrowRight className="w-4 h-4 mx-2 text-slate-500"/>
+             <span className="italic text-slate-300">"{p.frame}"</span>
+           </div>
+         ))}
+       </div>
+     </div>
+   </div>
+ );
+
+ return (
+   <div className="min-h-screen bg-slate-900 text-slate-200 p-4 font-sans flex items-center justify-center">
+     <div className="w-full max-w-md">
+       <div className="text-center">
+         <ShieldAlert className="w-12 h-12 mx-auto text-purple-400 mb-2"/>
+         <h1 className="text-2xl md:text-3xl font-bold text-slate-100">Narrative Preflight Scanner</h1>
+         <p className="text-slate-400 mt-1">Check the weather before you fly into the storm.</p>
+       </div>
+
+       <div className="mt-8">
+         <div className="flex items-center bg-slate-800 border border-slate-700 rounded-lg p-2 focus-within:ring-2 focus-within:ring-purple-500">
+           <Link className="w-5 h-5 text-slate-500 ml-2"/>
+           <input 
+             type="text"
+             value={url}
+             onChange={(e) => setUrl(e.target.value)}
+             placeholder="Paste article, tweet, or video link..."
+             className="flex-1 bg-transparent p-2 text-slate-200 placeholder-slate-500 focus:outline-none"
+           />
+         </div>
+         <button
+           onClick={handleScan}
+           disabled={!url || status === 'scanning'}
+           className="w-full mt-4 bg-purple-600 text-white font-semibold py-3 rounded-lg hover:bg-purple-700 disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center transition-all"
+         >
+           {status === 'scanning' ? (
+             <>
+               <Loader2 className="animate-spin mr-2"/>
+               Analyzing Narrative Vectors...
+             </>
+           ) : 'Scan Narrative'}
+         </button>
+       </div>
+       
+       {status === 'analyzed' && analysis && <AnalysisReport data={analysis} />}
+     </div>
+   </div>
+ );
+};
+
+export default NarrativePreflightScanner;

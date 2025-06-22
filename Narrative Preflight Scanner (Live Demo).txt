@@ -1,0 +1,182 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Narrative Preflight Scanner</title>
+   <script src="https://cdn.tailwindcss.com"></script>
+   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+   <script src="https://cdn.jsdelivr.net/npm/d3-graphviz@3.1.0/build/d3-graphviz.js"></script>
+   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+   <style>
+       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+       body {
+           font-family: 'Inter', sans-serif;
+           background-color: #111827;
+       }
+       .animate-fade-in {
+           animation: fadeIn 0.5s ease-in-out;
+       }
+       @keyframes fadeIn {
+           from { opacity: 0; transform: translateY(10px); }
+           to { opacity: 1; transform: translateY(0); }
+       }
+       .chart-container {
+           position: relative;
+           height: 120px;
+           width: 100%;
+       }
+   </style>
+</head>
+<body class="text-gray-200">
+
+   <div id="app" class="max-w-xl mx-auto p-4 sm:p-6">
+       <div class="text-center mb-8">
+           <svg id="shield-icon" class="w-16 h-16 mx-auto text-purple-400 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+           </svg>
+           <h1 class="text-3xl sm:text-4xl font-extrabold text-white">Narrative Preflight Scanner</h1>
+           <p class="text-gray-400 mt-2">Context before cognition. Check the weather before the storm.</p>
+       </div>
+
+       <div class="bg-gray-800 p-2 rounded-lg flex items-center border border-gray-700 focus-within:ring-2 focus-within:ring-purple-500">
+           <svg class="w-5 h-5 text-gray-500 ml-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></svg>
+           <input id="url-input" type="text" placeholder="Paste article, tweet, or video link..." class="flex-1 bg-transparent p-2 text-gray-200 placeholder-gray-500 focus:outline-none">
+       </div>
+       <button id="scan-button" class="w-full mt-4 bg-purple-600 text-white font-bold py-3 rounded-lg hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center justify-center transition-all">
+           Scan Narrative
+       </button>
+
+       <div id="analysis-report" class="hidden mt-8"></div>
+   </div>
+
+   <script>
+       const mockAnalyses = {
+           disinfo: {
+               risk: 'High', riskColor: 'bg-red-500', iconPath: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM12 8v4M12 16h.01",
+               title: "Shadow Cabal Behind Global Financial Reset, Leaked Memo Allegedly Shows",
+               velocity: { rating: 'High Velocity, Low Variance', warning: 'Possible Coordinated Disinfo Surge', color: '#F87171', data: [0, 0.1, 0.4, 0.9, 0.85] },
+               framing: {
+                   detectedFrame: 'Globalist Collapse',
+                   ancestry: ['Kremlin "Dollar Hegemony" meme (Q2 2024)', 'MAGA "Financial Reset" theories'],
+                   antibodies: ['Institutional Stress Test', 'Market Correction Cycle', 'Geopolitical Power Shift']
+               },
+               diffusion: `digraph {
+                   bgcolor="transparent";
+                   node [shape=box, style=rounded, fontname=Inter, color="#9CA3AF", fontcolor="#E5E7EB"];
+                   edge [color="#6B7280", fontname=Inter, fontcolor="#9CA3AF", fontsize=10];
+                   "Source Article" [style="filled", fillcolor="#BE185D"];
+                   "Source Article" -> "Fringe Forum (T+5m)" [label="seed"];
+                   "Fringe Forum (T+5m)" -> "MAGA Influencer A (T+30m)" [label="amplify"];
+                   "MAGA Influencer A (T+30m)" -> "Kremlin Outlet (T+2h)" [label="launder"];
+                   "Kremlin Outlet (T+2h)" -> "Western Alt-Media (T+5h)" [label="cross-contaminate"];
+               }`
+           },
+           neutral: {
+               risk: 'Low', riskColor: 'bg-green-500', iconPath: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10zM8 12.5l2 2 4-4",
+               title: "Central Bank Announces Quarterly Inflation Adjustments",
+               velocity: { rating: 'Organic Spread', warning: 'Normal Information Dispersal', color: '#4ADE80', data: [0, 0.1, 0.15, 0.2, 0.22] },
+               framing: {
+                   detectedFrame: 'Economic Reporting',
+                   ancestry: ['Standard financial news cycles'],
+                   antibodies: ['Monetary Policy Tool', 'Data-Driven Adjustment', 'Economic Indicator']
+               },
+               diffusion: `digraph {
+                   bgcolor="transparent";
+                   node [shape=box, style=rounded, fontname=Inter, color="#9CA3AF", fontcolor="#E5E7EB"];
+                   edge [color="#6B7280", fontname=Inter, fontcolor="#9CA3AF", fontsize=10];
+                   "Source Article" [style="filled", fillcolor="#059669"];
+                   "Source Article" -> "Financial News (T+1h)" [label="report"];
+                   "Financial News (T+1h)" -> "Academic Analysis (T+6h)" [label="cite"];
+                   "Financial News (T+1h)" -> "Public Discussion (T+12h)" [label="discuss"];
+               }`
+           }
+       };
+
+       const scanButton = document.getElementById('scan-button');
+       const urlInput = document.getElementById('url-input');
+       const analysisReport = document.getElementById('analysis-report');
+       const shieldIcon = document.getElementById('shield-icon');
+
+       let velocityChart = null;
+
+       function renderReport(data) {
+           shieldIcon.innerHTML = `<path d="${data.iconPath}"></path>`;
+           analysisReport.innerHTML = `
+               <div class="animate-fade-in space-y-6">
+                   <div class="flex items-center p-4 rounded-lg ${data.riskColor}">
+                       <svg class="w-10 h-10 flex-shrink-0 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${data.iconPath}"></path></svg>
+                       <div class="ml-4">
+                           <h2 class="text-xl font-bold text-white">Risk Assessment: ${data.risk}</h2>
+                           <p class="text-sm text-white/80">${data.title}</p>
+                       </div>
+                   </div>
+
+                   <div class="bg-gray-800 p-4 rounded-lg">
+                       <h3 class="font-bold flex items-center mb-2"><svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 2v6h6M2.66 15.57a10 10 0 1 0 .57-8.38"/></svg>Narrative Velocity</h3>
+                       <p class="text-lg font-bold" style="color: ${data.velocity.color};">${data.velocity.rating}</p>
+                       <p class="text-sm text-gray-400 mb-4">${data.velocity.warning}</p>
+                       <div class="chart-container"><canvas id="velocity-chart"></canvas></div>
+                   </div>
+
+                   <div class="bg-gray-800 p-4 rounded-lg">
+                       <h3 class="font-bold flex items-center mb-3"><svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10c-2.5 2.5-2.5 5-2.5 5s2.5 0 5-2.5"/><path d="m10 10-1.5 1.5a3.5 3.5 0 0 0 5 5L15 14"/><path d="M14 14-1.5-1.5"/><path d="m5 5 3 3"/><path d="m2 2 20 20"/></svg>Framing & Ancestry</h3>
+                       <p class="text-sm text-gray-400">Detected Frame: <span class="font-bold text-lg text-purple-400">${data.framing.detectedFrame}</span></p>
+                       <p class="text-sm text-gray-400 mt-2">Potential Ancestry:</p>
+                       <ul class="list-disc list-inside text-sm text-gray-300 mt-1">${data.framing.ancestry.map(line => `<li>${line}</li>`).join('')}</ul>
+                   </div>
+                   
+                   <div class="bg-blue-900/50 border border-blue-500 p-4 rounded-lg">
+                       <h3 class="font-bold flex items-center mb-3 text-blue-300"><svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10c-2.5 2.5-2.5 5-2.5 5s2.5 0 5-2.5"/><path d="m10 10-1.5 1.5a3.5 3.5 0 0 0 5 5L15 14"/><path d="M14 14-1.5-1.5"/><path d="m5 5 3 3"/><path d="m2 2 20 20"/></svg>Framing Antibodies</h3>
+                       <p class="text-sm text-gray-400 mb-3">Consider these alternative lenses to re-evaluate:</p>
+                       <div class="flex flex-wrap gap-2">${data.framing.antibodies.map(ab => `<span class="bg-blue-200 text-blue-900 text-xs font-semibold px-3 py-1 rounded-full">${ab}</span>`).join('')}</div>
+                   </div>
+
+                   <div class="bg-gray-800 p-4 rounded-lg">
+                       <h3 class="font-bold flex items-center mb-3"><svg class="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10c-2.5 2.5-2.5 5-2.5 5s2.5 0 5-2.5"/><path d="m10 10-1.5 1.5a3.5 3.5 0 0 0 5 5L15 14"/><path d="M14 14-1.5-1.5"/><path d="m5 5 3 3"/><path d="m2 2 20 20"/></svg>Narrative Diffusion Graph</h3>
+                       <div id="diffusion-graph" class="w-full h-64"></div>
+                   </div>
+               </div>
+           `;
+           analysisReport.classList.remove('hidden');
+
+           // Render Velocity Chart
+           const ctx = document.getElementById('velocity-chart').getContext('2d');
+           if (velocityChart) velocityChart.destroy();
+           velocityChart = new Chart(ctx, {
+               type: 'line',
+               data: {
+                   labels: ['T+0', 'T+1', 'T+2', 'T+3', 'T+4'],
+                   datasets: [{
+                       label: 'Velocity',
+                       data: data.velocity.data,
+                       borderColor: data.velocity.color,
+                       backgroundColor: `${data.velocity.color}33`,
+                       fill: true,
+                       tension: 0.4
+                   }]
+               },
+               options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { display: false } } }
+           });
+
+           // Render Diffusion Graph
+           d3.select("#diffusion-graph").graphviz().renderDot(data.diffusion);
+       }
+
+       scanButton.addEventListener('click', () => {
+           if (!urlInput.value) return;
+           scanButton.disabled = true;
+           scanButton.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Analyzing...`;
+           analysisReport.classList.add('hidden');
+           
+           setTimeout(() => {
+               const analysisType = urlInput.value.includes('bad') ? 'disinfo' : 'neutral';
+               renderReport(mockAnalyses[analysisType]);
+               scanButton.disabled = false;
+               scanButton.textContent = 'Scan Another Narrative';
+           }, 2500);
+       });
+
+   </script>
+</body>
+</html>
