@@ -1,0 +1,390 @@
+﻿# Lucian Betting Engine v2.2
+# Enhanced Security, Error Handling, and Extensibility
+# Additional improvements: logging, data validation, and better error recovery
+
+
+import os
+import requests
+import json
+import logging
+from abc import ABC, abstractmethod
+from typing import List, Dict, Optional, Any
+from dataclasses import dataclass
+from datetime import datetime
+
+
+# === Section 0: Enhanced Configuration ===
+@dataclass
+class Config:
+    """Configuration class with validation and defaults."""
+    api_key: Optional[str]
+    sport_key: str = "baseball_mlb"
+    region: str = "us"
+    market: str = "h2h"
+    timeout: int = 30
+    max_retries: int = 3
+    
+    def __post_init__(self):
+        if not self.api_key:
+            logging.warning("API key not provided - running in demo mode")
+
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+CONFIG = Config(api_key=os.getenv("API_KEY"))
+
+
+# === Section 1: Enhanced API Manager ===
+class APIManager:
+    """Manages all interactions with the external sports odds API with improved error handling."""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.base_url = "https://api.the-odds-api.com/v4"
+        self.session = requests.Session()
+        
+    def get_live_odds(self, sport_key: str, region: str, market: str) -> Optional[List[Dict]]:
+        """Fetches live odds with retry logic and comprehensive error handling."""
+        if not self.config.api_key:
+            logger.warning("API key not available - returning demo data")
+            return self._get_demo_data()
+
+
+        url = f"{self.base_url}/sports/{sport_key}/odds/"
+        params = {
+            'apiKey': self.config.api_key,
+            'regions': region,
+            'markets': market
+        }
+        
+        for attempt in range(self.config.max_retries):
+            try:
+                logger.info(f"Fetching odds data (attempt {attempt + 1}/{self.config.max_retries})")
+                response = self.session.get(url, params=params, timeout=self.config.timeout)
+                response.raise_for_status()
+                
+                remaining_requests = response.headers.get('X-Requests-Remaining', 'Unknown')
+                logger.info(f"API connection successful. Requests remaining: {remaining_requests}")
+                
+                return response.json()
+                
+            except requests.exceptions.Timeout:
+                logger.warning(f"Request timeout on attempt {attempt + 1}")
+            except requests.exceptions.HTTPError as e:
+                logger.error(f"HTTP error {e.response.status_code}: {e}")
+                if e.response.status_code == 401:
+                    logger.error("Authentication failed - check your API key")
+                    break
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Request failed on attempt {attempt + 1}: {e}")
+            except json.JSONDecodeError:
+                logger.error("Failed to decode JSON response")
+                
+            if attempt < self.config.max_retries - 1:
+                logger.info("Retrying in 2 seconds...")
+                import time
+                time.sleep(2)
+        
+        logger.error("All retry attempts failed")
+        return None
+    
+    def _get_demo_data(self) -> List[Dict]:
+        """Returns demo data for testing when API is unavailable."""
+        return [
+            {
+                "id": "demo_game_1",
+                "sport_key": "baseball_mlb",
+                "home_team": "New York Yankees",
+                "away_team": "Boston Red Sox",
+                "commence_time": datetime.now().isoformat(),
+                "bookmakers": [
+                    {
+                        "title": "DraftKings",
+                        "markets": [{
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "New York Yankees", "price": 1.85},
+                                {"name": "Boston Red Sox", "price": 2.10}
+                            ]
+                        }]
+                    },
+                    {
+                        "title": "FanDuel",
+                        "markets": [{
+                            "key": "h2h",
+                            "outcomes": [
+                                {"name": "New York Yankees", "price": 1.90},
+                                {"name": "Boston Red Sox", "price": 2.05}
+                            ]
+                        }]
+                    }
+                ]
+            }
+        ]
+
+
+# === Section 2: Enhanced Data Models ===
+@dataclass
+class GameOdds:
+    """Structured representation of game odds data."""
+    game_id: str
+    sport: str
+    home_team: str
+    away_team: str
+    bookmakers: List[Dict[str, Any]]
+    commence_time: Optional[str] = None
+    
+    def get_best_odds(self, team: str) -> Optional[Dict[str, Any]]:
+        """Find the best odds for a specific team across all bookmakers."""
+        best_odds = 0
+        best_bookmaker = None
+        
+        for bookmaker in self.bookmakers:
+            odds_key = "home_odds" if team == self.home_team else "away_odds"
+            if odds_key in bookmaker and bookmaker[odds_key] > best_odds:
+                best_odds = bookmaker[odds_key]
+                best_bookmaker = bookmaker["title"]
+        
+        return {"odds": best_odds, "bookmaker": best_bookmaker} if best_bookmaker else None
+
+
+class DataParser:
+    """Enhanced data parsing with validation."""
+   
+    @staticmethod
+    def parse_api_data(raw_data: List[Dict]) -> List[GameOdds]:
+        """Parse raw API data into structured GameOdds objects."""
+        parsed_games = []
+        
+        for game_data in raw_data:
+            try:
+                bookmaker_odds = []
+                
+                for bookmaker in game_data.get('bookmakers', []):
+                    market = next((m for m in bookmaker.get('markets', []) if m['key'] == 'h2h'), None)
+                    if not market:
+                        continue
+                    
+                    outcomes = market.get('outcomes', [])
+                    home_outcome = next((o for o in outcomes if o['name'] == game_data['home_team']), None)
+                    away_outcome = next((o for o in outcomes if o['name'] == game_data['away_team']), None)
+                    
+                    if home_outcome and away_outcome:
+                        bookmaker_odds.append({
+                            "title": bookmaker["title"],
+                            "home_odds": home_outcome['price'],
+                            "away_odds": away_outcome['price']
+                        })
+                
+                game_odds = GameOdds(
+                    game_id=game_data["id"],
+                    sport=game_data["sport_key"],
+                    home_team=game_data["home_team"],
+                    away_team=game_data["away_team"],
+                    bookmakers=bookmaker_odds,
+                    commence_time=game_data.get("commence_time")
+                )
+                
+                parsed_games.append(game_odds)
+                
+            except KeyError as e:
+                logger.warning(f"Skipping malformed game data - missing key: {e}")
+            except Exception as e:
+                logger.error(f"Error parsing game data: {e}")
+        
+        return parsed_games
+
+
+# === Section 3: Enhanced Model Definitions ===
+@dataclass
+class BettingRecommendation:
+    """Structured betting recommendation."""
+    team: str
+    odds: float
+    bookmaker: str
+    confidence: float
+    reasoning: str
+    game_id: str
+
+
+class BettingModel(ABC):
+    """Enhanced abstract base class for betting models."""
+    
+    def __init__(self, name: str):
+        self.name = name
+        self.logger = logging.getLogger(f"Model.{name}")
+   
+    @abstractmethod
+    def analyze(self, games: List[GameOdds]) -> List[BettingRecommendation]:
+        """Each model must implement analysis logic returning structured recommendations."""
+        pass
+    
+    def log_summary(self):
+        """Log model summary."""
+        self.logger.info(f"Running {self.name} analysis")
+
+
+class MatthewModel(BettingModel):
+    """Enhanced high-conviction model with confidence scoring."""
+    
+    def analyze(self, games: List[GameOdds]) -> List[BettingRecommendation]:
+        self.log_summary()
+        self.logger.info("Strategy: Find the single best value moneyline bet")
+        
+        best_recommendation = None
+        best_odds = 0
+        
+        for game in games:
+            for bookmaker in game.bookmakers:
+                # Check home team odds
+                if bookmaker["home_odds"] > best_odds:
+                    best_odds = bookmaker["home_odds"]
+                    best_recommendation = BettingRecommendation(
+                        team=game.home_team,
+                        odds=best_odds,
+                        bookmaker=bookmaker["title"],
+                        confidence=min(best_odds / 2.0, 1.0),  # Simple confidence metric
+                        reasoning=f"Highest available odds at {best_odds}",
+                        game_id=game.game_id
+                    )
+                
+                # Check away team odds
+                if bookmaker["away_odds"] > best_odds:
+                    best_odds = bookmaker["away_odds"]
+                    best_recommendation = BettingRecommendation(
+                        team=game.away_team,
+                        odds=best_odds,
+                        bookmaker=bookmaker["title"],
+                        confidence=min(best_odds / 2.0, 1.0),
+                        reasoning=f"Highest available odds at {best_odds}",
+                        game_id=game.game_id
+                    )
+        
+        return [best_recommendation] if best_recommendation else []
+
+
+class SharpRecoilModel(BettingModel):
+    """Enhanced line discrepancy detection model."""
+    
+    def analyze(self, games: List[GameOdds]) -> List[BettingRecommendation]:
+        self.log_summary()
+        self.logger.info("Strategy: Detect significant line discrepancies")
+        
+        recommendations = []
+        
+        for game in games:
+            if len(game.bookmakers) < 2:
+                continue
+            
+            home_odds = [b['home_odds'] for b in game.bookmakers]
+            away_odds = [b['away_odds'] for b in game.bookmakers]
+            
+            home_discrepancy = max(home_odds) - min(home_odds) if home_odds else 0
+            away_discrepancy = max(away_odds) - min(away_odds) if away_odds else 0
+            
+            # Threshold for significant discrepancy
+            threshold = 0.1
+            
+            if home_discrepancy > threshold:
+                best_home_odds = max(home_odds)
+                best_bookmaker = next(b['title'] for b in game.bookmakers if b['home_odds'] == best_home_odds)
+                
+                recommendations.append(BettingRecommendation(
+                    team=game.home_team,
+                    odds=best_home_odds,
+                    bookmaker=best_bookmaker,
+                    confidence=min(home_discrepancy * 2, 1.0),
+                    reasoning=f"Significant odds discrepancy: {home_discrepancy:.3f}",
+                    game_id=game.game_id
+                ))
+            
+            if away_discrepancy > threshold:
+                best_away_odds = max(away_odds)
+                best_bookmaker = next(b['title'] for b in game.bookmakers if b['away_odds'] == best_away_odds)
+                
+                recommendations.append(BettingRecommendation(
+                    team=game.away_team,
+                    odds=best_away_odds,
+                    bookmaker=best_bookmaker,
+                    confidence=min(away_discrepancy * 2, 1.0),
+                    reasoning=f"Significant odds discrepancy: {away_discrepancy:.3f}",
+                    game_id=game.game_id
+                ))
+        
+        return recommendations
+
+
+# === Section 4: Enhanced Execution Engine ===
+class BettingEngine:
+    """Main engine orchestrating the betting analysis."""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.api_manager = APIManager(config)
+        self.data_parser = DataParser()
+        self.logger = logging.getLogger("BettingEngine")
+    
+    def run_analysis(self) -> None:
+        """Execute the complete betting analysis pipeline."""
+        self.logger.info("=== Lucian Betting Engine v2.2 Starting ===")
+        
+        # Fetch market data
+        raw_data = self.api_manager.get_live_odds(
+            sport_key=self.config.sport_key,
+            region=self.config.region,
+            market=self.config.market
+        )
+        
+        if not raw_data:
+            self.logger.error("No market data available - terminating analysis")
+            return
+        
+        # Parse data
+        games = self.data_parser.parse_api_data(raw_data)
+        self.logger.info(f"Parsed {len(games)} games for analysis")
+        
+        if not games:
+            self.logger.warning("No valid games found after parsing")
+            return
+        
+        # Initialize models
+        models = [
+            MatthewModel("Matthew Model"),
+            SharpRecoilModel("Sharp Recoil Model")
+        ]
+        
+        # Run analysis
+        all_recommendations = []
+        for model in models:
+            recommendations = model.analyze(games)
+            all_recommendations.extend(recommendations)
+            
+            # Display results
+            print(f"\n==== {model.name} Results ====")
+            if recommendations:
+                for rec in recommendations:
+                    print(f"  • {rec.team} @ {rec.odds} ({rec.bookmaker})")
+                    print(f"    Confidence: {rec.confidence:.2%}")
+                    print(f"    Reasoning: {rec.reasoning}")
+            else:
+                print("  • No opportunities identified")
+        
+        self.logger.info("=== Analysis Complete ===")
+        
+        # Summary
+        if all_recommendations:
+            best_rec = max(all_recommendations, key=lambda x: x.confidence)
+            print(f"\n🎯 TOP RECOMMENDATION: {best_rec.team} @ {best_rec.odds} ({best_rec.bookmaker})")
+            print(f"   Confidence: {best_rec.confidence:.2%}")
+
+
+# === Section 5: Main Execution ===
+if __name__ == "__main__":
+    engine = BettingEngine(CONFIG)
+    engine.run_analysis()

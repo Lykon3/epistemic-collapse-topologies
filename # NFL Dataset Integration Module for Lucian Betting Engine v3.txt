@@ -1,0 +1,470 @@
+﻿# NFL Dataset Integration Module for Lucian Betting Engine v3.0
+# Transforms real Kaggle NFL data into ML-ready features
+
+
+import pandas as pd
+import numpy as np
+from datetime import datetime
+import logging
+from typing import Dict, List, Optional
+import warnings
+warnings.filterwarnings('ignore')
+
+
+logger = logging.getLogger(__name__)
+
+
+class NFLDatasetProcessor:
+    """
+    Processes the Kaggle NFL scores and betting dataset for ML training.
+    Handles data from 1979-present with betting lines, weather, and game outcomes.
+    """
+    
+    def __init__(self, data_path: str = "nfl_scores_betting.csv"):
+        self.data_path = data_path
+        self.raw_data = None
+        self.processed_data = None
+        self.feature_columns = []
+        
+    def load_and_clean_data(self) -> pd.DataFrame:
+        """Load and perform initial cleaning of the NFL dataset."""
+        logger.info("Loading NFL dataset...")
+        
+        try:
+            # Load the main dataset
+            self.raw_data = pd.read_csv(self.data_path)
+            logger.info(f"Loaded {len(self.raw_data)} games from dataset")
+            
+            # Basic data cleaning
+            df = self._clean_basic_data(self.raw_data)
+            
+            # Filter to years with reliable betting data (1979+)
+            df = df[df['schedule_season'] >= 1979].copy()
+            
+            # Filter to regular season and playoffs only
+            df = df[df['schedule_week'].notna()].copy()
+            
+            logger.info(f"After filtering: {len(df)} games ready for processing")
+            return df
+            
+        except FileNotFoundError:
+            logger.error(f"Dataset file {self.data_path} not found.")
+            logger.info("Please download from: https://www.kaggle.com/datasets/tobycrabtree/nfl-scores-and-betting-data")
+            return self._create_demo_data()
+        except Exception as e:
+            logger.error(f"Error loading dataset: {e}")
+            return self._create_demo_data()
+    
+    def _clean_basic_data(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Perform basic data cleaning operations."""
+        logger.info("Cleaning raw data...")
+        
+        # Standardize column names
+        df.columns = df.columns.str.lower().str.replace(' ', '_')
+        
+        # Convert date columns
+        if 'schedule_date' in df.columns:
+            df['schedule_date'] = pd.to_datetime(df['schedule_date'], errors='coerce')
+        
+        # Clean team names (standardize abbreviations)
+        team_mapping = {
+            'OAK': 'LV',  # Raiders moved to Las Vegas
+            'STL': 'LA',  # Rams moved to LA
+            'SD': 'LAC',  # Chargers moved to LA
+        }
+        
+        for old_team, new_team in team_mapping.items():
+            df['team_home'] = df['team_home'].replace(old_team, new_team)
+            df['team_away'] = df['team_away'].replace(old_team, new_team)
+        
+        # Handle missing values in critical columns
+        numeric_columns = ['spread_favorite', 'over_under_line', 'score_home', 'score_away']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        return df
+    
+    def engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Engineer comprehensive features for ML training."""
+        logger.info("Engineering features for ML training...")
+        
+        # Create target variables
+        df = self._create_target_variables(df)
+        
+        # Team performance features
+        df = self._create_team_performance_features(df)
+        
+        # Situational features
+        df = self._create_situational_features(df)
+        
+        # Market features
+        df = self._create_market_features(df)
+        
+        # Weather features
+        df = self._create_weather_features(df)
+        
+        # Rolling performance metrics
+        df = self._create_rolling_features(df)
+        
+        # Remove games with missing critical data
+        df = self._filter_complete_games(df)
+        
+        logger.info(f"Feature engineering complete. {len(self.feature_columns)} features created.")
+        self.processed_data = df
+        return df
+    
+    def _create_target_variables(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create target variables for ML prediction."""
+        
+        # Calculate actual point spread (home team perspective)
+        df['actual_spread'] = df['score_home'] - df['score_away']
+        
+        # Create spread coverage target
+        # If home team favored (negative spread), they must win by more than the spread
+        # If home team underdog (positive spread), they can lose by less than the spread or win
+        df['home_covered_spread'] = 0
+        
+        # Handle cases where spread data exists
+        spread_mask = df['spread_favorite'].notna()
+        
+        # Home team favored (spread is negative for home team)
+        home_favored = (df['team_favorite'] == df['team_home']) & spread_mask
+        df.loc[home_favored, 'home_covered_spread'] = (
+            df.loc[home_favored, 'actual_spread'] > df.loc[home_favored, 'spread_favorite'].abs()
+        ).astype(int)
+        
+        # Away team favored (spread is positive for home team) 
+        away_favored = (df['team_favorite'] == df['team_away']) & spread_mask
+        df.loc[away_favored, 'home_covered_spread'] = (
+            df.loc[away_favored, 'actual_spread'] > -df.loc[away_favored, 'spread_favorite'].abs()
+        ).astype(int)
+        
+        # Total points target
+        df['total_points'] = df['score_home'] + df['score_away']
+        df['total_over'] = 0
+        over_under_mask = df['over_under_line'].notna()
+        df.loc[over_under_mask, 'total_over'] = (
+            df.loc[over_under_mask, 'total_points'] > df.loc[over_under_mask, 'over_under_line']
+        ).astype(int)
+        
+        return df
+    
+    def _create_team_performance_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create team performance-based features."""
+        
+        # Sort by date for rolling calculations
+        df = df.sort_values(['schedule_date']).reset_index(drop=True)
+        
+        # Initialize team performance tracking
+        team_stats = {}
+        
+        # Calculate rolling team performance
+        rolling_features = []
+        
+        for idx, row in df.iterrows():
+            home_team = row['team_home']
+            away_team = row['team_away']
+            season = row['schedule_season']
+            
+            # Get recent performance for both teams
+            home_perf = self._get_team_recent_performance(team_stats, home_team, season, 5)
+            away_perf = self._get_team_recent_performance(team_stats, away_team, season, 5)
+            
+            # Calculate differentials
+            features = {
+                'home_avg_score_5g': home_perf['avg_score'],
+                'away_avg_score_5g': away_perf['avg_score'],
+                'home_avg_allowed_5g': home_perf['avg_allowed'],
+                'away_avg_allowed_5g': away_perf['avg_allowed'],
+                'home_win_pct_5g': home_perf['win_pct'],
+                'away_win_pct_5g': away_perf['win_pct'],
+                'score_diff_5g': home_perf['avg_score'] - away_perf['avg_score'],
+                'defense_diff_5g': away_perf['avg_allowed'] - home_perf['avg_allowed'],
+                'momentum_diff_5g': home_perf['win_pct'] - away_perf['win_pct']
+            }
+            
+            rolling_features.append(features)
+            
+            # Update team stats with current game results
+            if not pd.isna(row['score_home']):
+                self._update_team_stats(team_stats, home_team, season, 
+                                      row['score_home'], row['score_away'], 
+                                      1 if row['score_home'] > row['score_away'] else 0)
+                self._update_team_stats(team_stats, away_team, season,
+                                      row['score_away'], row['score_home'],
+                                      1 if row['score_away'] > row['score_home'] else 0)
+        
+        # Add rolling features to dataframe
+        rolling_df = pd.DataFrame(rolling_features)
+        df = pd.concat([df, rolling_df], axis=1)
+        
+        # Add these to feature columns
+        self.feature_columns.extend(rolling_df.columns.tolist())
+        
+        return df
+    
+    def _create_situational_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create situational and contextual features."""
+        
+        # Rest days (days since last game)
+        df['home_rest_days'] = 7  # Default assumption
+        df['away_rest_days'] = 7
+        
+        # Week of season effects
+        df['early_season'] = (df['schedule_week'] <= 4).astype(int)
+        df['late_season'] = (df['schedule_week'] >= 14).astype(int)
+        df['playoff_week'] = (df['schedule_week'] > 17).astype(int)
+        
+        # Day of week effects
+        if 'schedule_date' in df.columns:
+            df['day_of_week'] = df['schedule_date'].dt.dayofweek
+            df['is_sunday'] = (df['day_of_week'] == 6).astype(int)
+            df['is_monday'] = (df['day_of_week'] == 0).astype(int)
+            df['is_thursday'] = (df['day_of_week'] == 3).astype(int)
+        
+        # Divisional rivalry
+        # Create division mappings (simplified)
+        afc_east = ['BUF', 'MIA', 'NE', 'NYJ']
+        afc_north = ['BAL', 'CIN', 'CLE', 'PIT'] 
+        afc_south = ['HOU', 'IND', 'JAX', 'TEN']
+        afc_west = ['DEN', 'KC', 'LV', 'LAC']
+        nfc_east = ['DAL', 'NYG', 'PHI', 'WAS']
+        nfc_north = ['CHI', 'DET', 'GB', 'MIN']
+        nfc_south = ['ATL', 'CAR', 'NO', 'TB']
+        nfc_west = ['ARI', 'LA', 'SF', 'SEA']
+        
+        divisions = [afc_east, afc_north, afc_south, afc_west, 
+                    nfc_east, nfc_north, nfc_south, nfc_west]
+        
+        df['divisional_game'] = 0
+        for division in divisions:
+            divisional_mask = df['team_home'].isin(division) & df['team_away'].isin(division)
+            df.loc[divisional_mask, 'divisional_game'] = 1
+        
+        situational_features = ['early_season', 'late_season', 'playoff_week', 
+                              'is_sunday', 'is_monday', 'is_thursday', 'divisional_game']
+        self.feature_columns.extend(situational_features)
+        
+        return df
+    
+    def _create_market_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create betting market-based features."""
+        
+        # Spread magnitude (how big is the spread)
+        df['spread_magnitude'] = df['spread_favorite'].abs()
+        df['large_spread'] = (df['spread_magnitude'] > 7).astype(int)
+        df['pick_em_game'] = (df['spread_magnitude'] < 3).astype(int)
+        
+        # Total line features
+        df['high_total'] = (df['over_under_line'] > 47).astype(int)
+        df['low_total'] = (df['over_under_line'] < 40).astype(int)
+        
+        # Home underdog (typically valuable betting situation)
+        df['home_underdog'] = 0
+        home_dog_mask = (df['team_favorite'] == df['team_away']) & df['spread_favorite'].notna()
+        df.loc[home_dog_mask, 'home_underdog'] = 1
+        
+        market_features = ['spread_magnitude', 'large_spread', 'pick_em_game',
+                          'high_total', 'low_total', 'home_underdog']
+        self.feature_columns.extend(market_features)
+        
+        return df
+    
+    def _create_weather_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create weather-based features if available."""
+        
+        # Initialize weather features with defaults
+        df['temp_fahrenheit'] = 70  # Default indoor temperature
+        df['wind_mph'] = 0
+        df['is_dome'] = 0
+        df['weather_factor'] = 0
+        
+        # If weather data exists in dataset, use it
+        if 'weather_temperature' in df.columns:
+            df['temp_fahrenheit'] = pd.to_numeric(df['weather_temperature'], errors='coerce').fillna(70)
+        
+        if 'weather_wind_mph' in df.columns:
+            df['wind_mph'] = pd.to_numeric(df['weather_wind_mph'], errors='coerce').fillna(0)
+        
+        # Calculate weather impact factor
+        df['extreme_cold'] = (df['temp_fahrenheit'] < 32).astype(int)
+        df['extreme_heat'] = (df['temp_fahrenheit'] > 85).astype(int)
+        df['high_wind'] = (df['wind_mph'] > 15).astype(int)
+        df['weather_factor'] = df['extreme_cold'] + df['extreme_heat'] + df['high_wind']
+        
+        weather_features = ['temp_fahrenheit', 'wind_mph', 'extreme_cold', 
+                          'extreme_heat', 'high_wind', 'weather_factor']
+        self.feature_columns.extend(weather_features)
+        
+        return df
+    
+    def _create_rolling_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Create additional rolling performance features."""
+        
+        # These were already created in team performance, but add season-long stats
+        df['season_week'] = df['schedule_week']
+        df['season_progress'] = df['season_week'] / 17  # Normalize season progress
+        
+        rolling_features = ['season_week', 'season_progress']
+        self.feature_columns.extend(rolling_features)
+        
+        return df
+    
+    def _filter_complete_games(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Filter to games with complete data for ML training."""
+        
+        # Required columns for training
+        required_columns = ['home_covered_spread', 'total_over', 'spread_magnitude']
+        
+        # Filter out games missing essential data
+        complete_mask = True
+        for col in required_columns:
+            if col in df.columns:
+                complete_mask &= df[col].notna()
+        
+        # Also require that we have scores
+        complete_mask &= df['score_home'].notna() & df['score_away'].notna()
+        
+        filtered_df = df[complete_mask].copy()
+        logger.info(f"Filtered to {len(filtered_df)} games with complete data")
+        
+        return filtered_df
+    
+    def _get_team_recent_performance(self, team_stats: Dict, team: str, season: int, games: int) -> Dict:
+        """Get recent performance statistics for a team."""
+        
+        key = f"{team}_{season}"
+        if key not in team_stats:
+            return {'avg_score': 21, 'avg_allowed': 21, 'win_pct': 0.5}
+        
+        stats = team_stats[key]
+        recent_games = min(len(stats['scores']), games)
+        
+        if recent_games == 0:
+            return {'avg_score': 21, 'avg_allowed': 21, 'win_pct': 0.5}
+        
+        recent_scores = stats['scores'][-recent_games:]
+        recent_allowed = stats['allowed'][-recent_games:]
+        recent_wins = stats['wins'][-recent_games:]
+        
+        return {
+            'avg_score': np.mean(recent_scores),
+            'avg_allowed': np.mean(recent_allowed), 
+            'win_pct': np.mean(recent_wins)
+        }
+    
+    def _update_team_stats(self, team_stats: Dict, team: str, season: int, 
+                          scored: int, allowed: int, won: int):
+        """Update rolling team statistics."""
+        
+        key = f"{team}_{season}"
+        if key not in team_stats:
+            team_stats[key] = {'scores': [], 'allowed': [], 'wins': []}
+        
+        team_stats[key]['scores'].append(scored)
+        team_stats[key]['allowed'].append(allowed)
+        team_stats[key]['wins'].append(won)
+        
+        # Keep only recent games (max 16 games)
+        for stat_type in ['scores', 'allowed', 'wins']:
+            if len(team_stats[key][stat_type]) > 16:
+                team_stats[key][stat_type] = team_stats[key][stat_type][-16:]
+    
+    def _create_demo_data(self) -> pd.DataFrame:
+        """Create demo data if real dataset unavailable."""
+        logger.warning("Creating demo data - download real dataset for production use")
+        
+        # Generate realistic demo NFL data
+        np.random.seed(42)
+        n_games = 2000
+        
+        teams = ['KC', 'BUF', 'LAR', 'GB', 'TB', 'DAL', 'SF', 'BAL', 'CIN', 'TEN']
+        
+        demo_data = []
+        for i in range(n_games):
+            season = np.random.choice([2020, 2021, 2022, 2023])
+            week = np.random.randint(1, 18)
+            
+            home_team = np.random.choice(teams)
+            away_team = np.random.choice([t for t in teams if t != home_team])
+            
+            # Generate realistic scores
+            home_score = max(0, int(np.random.normal(24, 8)))
+            away_score = max(0, int(np.random.normal(21, 8)))
+            
+            # Generate betting lines
+            expected_diff = np.random.normal(3, 7)  # Home field advantage
+            spread = -round(expected_diff, 1)
+            total = home_score + away_score + np.random.normal(0, 4)
+            
+            demo_data.append({
+                'schedule_season': season,
+                'schedule_week': week,
+                'schedule_date': f"{season}-09-{10 + week:02d}",
+                'team_home': home_team,
+                'team_away': away_team,
+                'score_home': home_score,
+                'score_away': away_score,
+                'spread_favorite': abs(spread),
+                'team_favorite': home_team if spread < 0 else away_team,
+                'over_under_line': round(total, 1),
+                'weather_temperature': np.random.normal(65, 20),
+                'weather_wind_mph': max(0, np.random.normal(8, 5))
+            })
+        
+        return pd.DataFrame(demo_data)
+    
+    def get_training_data(self) -> tuple:
+        """Get properly formatted training data for ML models."""
+        
+        if self.processed_data is None:
+            raise ValueError("Data must be processed first using engineer_features()")
+        
+        # Prepare feature matrix
+        X = self.processed_data[self.feature_columns].fillna(0)
+        
+        # Prepare targets
+        y_spread = self.processed_data['home_covered_spread']
+        y_total = self.processed_data['total_over']
+        
+        logger.info(f"Training data prepared: {len(X)} games, {len(self.feature_columns)} features")
+        
+        return X, y_spread, y_total, self.processed_data
+
+
+# Usage example for integration with Lucian v3.0
+def integrate_real_nfl_data():
+    """Example of how to integrate real NFL data with Lucian v3.0"""
+    
+    logger.info("=== Integrating Real NFL Dataset ===")
+    
+    # Initialize processor
+    processor = NFLDatasetProcessor("nfl_scores_betting.csv")  # Download from Kaggle
+    
+    # Load and clean data
+    raw_data = processor.load_and_clean_data()
+    
+    # Engineer features
+    processed_data = processor.engineer_features(raw_data)
+    
+    # Get training data
+    X, y_spread, y_total, full_data = processor.get_training_data()
+    
+    logger.info(f"Dataset ready: {len(X)} games with {X.shape[1]} features")
+    logger.info(f"Date range: {full_data['schedule_season'].min()} - {full_data['schedule_season'].max()}")
+    logger.info(f"Spread coverage rate: {y_spread.mean():.1%}")
+    logger.info(f"Over rate: {y_total.mean():.1%}")
+    
+    return processor, X, y_spread, y_total, full_data
+
+
+if __name__ == "__main__":
+    # Test the integration
+    processor, X, y_spread, y_total, data = integrate_real_nfl_data()
+    
+    print("\n=== DATASET INTEGRATION COMPLETE ===")
+    print(f"Ready for ML training with {len(X)} games")
+    print(f"Feature count: {X.shape[1]}")
+    print(f"Years covered: {data['schedule_season'].min()}-{data['schedule_season'].max()}")
+    print("\nNext step: Replace sample data in LucianBettingEngine with this real data!")

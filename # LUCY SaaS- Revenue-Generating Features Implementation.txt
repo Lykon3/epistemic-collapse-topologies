@@ -1,0 +1,530 @@
+﻿# LUCY SaaS: Revenue-Generating Features Implementation
+# Core features that drive user acquisition and conversion
+
+
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field
+from typing import Dict, List, Optional
+from enum import Enum
+from datetime import datetime, timedelta
+import stripe
+import asyncio
+import redis
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+import logging
+
+
+# ============================================
+# ENHANCED SUBSCRIPTION & USER MANAGEMENT
+# ============================================
+
+
+class SubscriptionTier(str, Enum):
+    free = "free"
+    pro = "pro" 
+    syndicate = "syndicate"
+
+
+class User(BaseModel):
+    id: str
+    email: str
+    tier: SubscriptionTier
+    created_at: datetime
+    subscription_end: Optional[datetime] = None
+    trial_end: Optional[datetime] = None
+    api_calls_used: int = 0
+    api_calls_limit: int = 100
+    performance_stats: Dict = {}
+
+
+class SignalAccess(BaseModel):
+    """Defines what signals each tier can access"""
+    real_time: bool = False
+    quantum_enhanced: bool = False
+    portfolio_optimization: bool = False
+    risk_assessment: bool = False
+    api_access: bool = False
+    delay_hours: int = 24
+
+
+# Define tier permissions
+TIER_PERMISSIONS = {
+    SubscriptionTier.free: SignalAccess(delay_hours=24),
+    SubscriptionTier.pro: SignalAccess(
+        real_time=True, 
+        risk_assessment=True, 
+        api_access=True,
+        delay_hours=0
+    ),
+    SubscriptionTier.syndicate: SignalAccess(
+        real_time=True,
+        quantum_enhanced=True,
+        portfolio_optimization=True,
+        risk_assessment=True,
+        api_access=True,
+        delay_hours=0
+    )
+}
+
+
+# ============================================
+# SIGNAL DELIVERY SYSTEM WITH TIER RESTRICTIONS
+# ============================================
+
+
+class SignalDeliveryService:
+    """Manages signal delivery based on user subscription tier"""
+    
+    def __init__(self, redis_client, quantum_engine):
+        self.redis = redis_client
+        self.quantum_engine = quantum_engine
+        
+    async def get_signals_for_user(self, user: User) -> List[Dict]:
+        """Get signals appropriate for user's subscription tier"""
+        permissions = TIER_PERMISSIONS[user.tier]
+        
+        if user.tier == SubscriptionTier.free:
+            return await self._get_delayed_signals(permissions.delay_hours)
+        elif user.tier == SubscriptionTier.pro:
+            return await self._get_pro_signals(user)
+        elif user.tier == SubscriptionTier.syndicate:
+            return await self._get_syndicate_signals(user)
+    
+    async def _get_delayed_signals(self, delay_hours: int) -> List[Dict]:
+        """Get delayed signals for free users"""
+        cutoff_time = datetime.now() - timedelta(hours=delay_hours)
+        
+        # Retrieve signals from cache that are older than delay
+        signals = []
+        cached_signals = self.redis.get("historical_signals")
+        
+        if cached_signals:
+            for signal in cached_signals:
+                if signal['timestamp'] <= cutoff_time:
+                    # Remove sensitive information for free tier
+                    filtered_signal = {
+                        'sport': signal['sport'],
+                        'event': signal['event'],
+                        'market': signal['market'],
+                        'prediction': signal['prediction'],
+                        'confidence': round(signal['confidence'], 2),
+                        'timestamp': signal['timestamp'],
+                        'outcome': signal.get('outcome', 'pending')
+                    }
+                    signals.append(filtered_signal)
+        
+        return signals[-10:]  # Last 10 signals
+    
+    async def _get_pro_signals(self, user: User) -> List[Dict]:
+        """Get real-time signals with basic risk assessment"""
+        current_signals = await self._get_current_market_signals()
+        
+        enhanced_signals = []
+        for signal in current_signals:
+            # Add Pro-tier enhancements
+            enhanced_signal = signal.copy()
+            enhanced_signal.update({
+                'kelly_size': self._calculate_kelly_size(signal),
+                'risk_level': self._assess_basic_risk(signal),
+                'expected_value': self._calculate_expected_value(signal),
+                'recommendation': self._generate_recommendation(signal)
+            })
+            enhanced_signals.append(enhanced_signal)
+        
+        return enhanced_signals
+    
+    async def _get_syndicate_signals(self, user: User) -> List[Dict]:
+        """Get premium signals with full quantum analysis"""
+        pro_signals = await self._get_pro_signals(user)
+        
+        quantum_enhanced = []
+        for signal in pro_signals:
+            # Apply quantum enhancement
+            quantum_analysis = await self.quantum_engine.comprehensive_analysis(signal)
+            
+            syndicate_signal = signal.copy()
+            syndicate_signal.update({
+                'quantum_confidence': quantum_analysis.get('enhanced_confidence'),
+                'topological_phase': quantum_analysis.get('market_phase'),
+                'causal_factors': quantum_analysis.get('causal_mapping'),
+                'portfolio_allocation': quantum_analysis.get('optimal_allocation'),
+                'early_warnings': quantum_analysis.get('warning_signals'),
+                'market_regime': quantum_analysis.get('regime_classification'),
+                'correlation_matrix': quantum_analysis.get('factor_correlations')
+            })
+            quantum_enhanced.append(syndicate_signal)
+        
+        return quantum_enhanced
+
+
+# ============================================
+# CONVERSION OPTIMIZATION SYSTEM
+# ============================================
+
+
+class ConversionOptimizer:
+    """Drives free-to-paid and pro-to-syndicate conversions"""
+    
+    def __init__(self, db_session, notification_service):
+        self.db = db_session
+        self.notifications = notification_service
+        
+    async def track_user_engagement(self, user: User, action: str):
+        """Track user actions to optimize conversion timing"""
+        engagement_events = {
+            'signal_view': 1,
+            'signal_click': 2, 
+            'performance_check': 3,
+            'api_call': 2,
+            'high_confidence_signal': 5
+        }
+        
+        score = engagement_events.get(action, 1)
+        
+        # Update user engagement score
+        await self._update_engagement_score(user.id, score)
+        
+        # Check for conversion opportunities
+        await self._check_conversion_opportunity(user, action)
+    
+    async def _check_conversion_opportunity(self, user: User, action: str):
+        """Identify optimal moments for upgrade prompts"""
+        
+        if user.tier == SubscriptionTier.free:
+            # Free to Pro conversion triggers
+            if action == 'high_confidence_signal':
+                await self._trigger_pro_upgrade_prompt(user, 
+                    "🔥 High confidence signal detected! Upgrade to Pro for real-time access")
+            
+            elif action == 'api_call' and user.api_calls_used > 50:
+                await self._trigger_pro_upgrade_prompt(user,
+                    "📊 You're actively using our API! Upgrade for unlimited calls")
+        
+        elif user.tier == SubscriptionTier.pro:
+            # Pro to Syndicate conversion triggers
+            if action == 'performance_check':
+                await self._check_syndicate_qualification(user)
+    
+    async def _trigger_pro_upgrade_prompt(self, user: User, message: str):
+        """Send targeted upgrade prompt to free users"""
+        await self.notifications.send_in_app_notification(user.id, {
+            'type': 'upgrade_prompt',
+            'message': message,
+            'cta': 'Upgrade to Pro - First week free!',
+            'discount_code': 'FIRSTWEEK',
+            'expires_at': datetime.now() + timedelta(hours=24)
+        })
+    
+    async def _check_syndicate_qualification(self, user: User):
+        """Check if Pro user qualifies for Syndicate tier"""
+        # Qualification criteria
+        criteria = {
+            'min_tenure_days': 30,
+            'min_api_calls': 500,
+            'min_performance_score': 0.6
+        }
+        
+        user_stats = await self._get_user_statistics(user.id)
+        
+        if all([
+            user_stats['tenure_days'] >= criteria['min_tenure_days'],
+            user_stats['total_api_calls'] >= criteria['min_api_calls'],
+            user_stats['performance_score'] >= criteria['min_performance_score']
+        ]):
+            await self._invite_to_syndicate(user)
+    
+    async def _invite_to_syndicate(self, user: User):
+        """Send exclusive Syndicate tier invitation"""
+        await self.notifications.send_email(user.email, {
+            'template': 'syndicate_invitation',
+            'subject': '🌟 Exclusive Invitation: LUCY Syndicate Access',
+            'data': {
+                'user_name': user.email.split('@')[0],
+                'performance_stats': user.performance_stats,
+                'invitation_code': f"SYNDICATE_{user.id[:8]}",
+                'consultation_link': f"https://calendly.com/lucy-syndicate/{user.id}"
+            }
+        })
+
+
+# ============================================
+# PERFORMANCE TRACKING & SOCIAL PROOF
+# ============================================
+
+
+class PerformanceTracker:
+    """Track and display system performance for marketing"""
+    
+    def __init__(self, db_session):
+        self.db = db_session
+        
+    async def record_signal_outcome(self, signal_id: str, outcome: bool):
+        """Record the outcome of a signal for performance tracking"""
+        # Update signal with outcome
+        await self._update_signal_outcome(signal_id, outcome)
+        
+        # Update global performance metrics
+        await self._update_global_metrics(outcome)
+        
+        # Update user-specific performance if they followed the signal
+        await self._update_user_performance(signal_id, outcome)
+    
+    async def get_public_performance_stats(self) -> Dict:
+        """Get performance stats for marketing/landing page"""
+        stats = await self._calculate_performance_metrics()
+        
+        return {
+            'overall_accuracy': round(stats['win_rate'] * 100, 1),
+            'total_signals': stats['total_signals'],
+            'profit_units': round(stats['profit_units'], 1),
+            'best_month': stats['best_month_performance'],
+            'streak': stats['current_win_streak'],
+            'last_updated': datetime.now().isoformat()
+        }
+    
+    async def generate_user_report(self, user: User) -> Dict:
+        """Generate personalized performance report"""
+        if user.tier == SubscriptionTier.free:
+            return await self._generate_basic_report(user)
+        else:
+            return await self._generate_detailed_report(user)
+    
+    async def _generate_detailed_report(self, user: User) -> Dict:
+        """Detailed performance report for paid users"""
+        user_stats = await self._get_user_statistics(user.id)
+        
+        return {
+            'user_accuracy': user_stats['accuracy'],
+            'signals_followed': user_stats['signals_followed'],
+            'estimated_profit': user_stats['estimated_profit'],
+            'best_performing_sport': user_stats['best_sport'],
+            'risk_profile': user_stats['risk_profile'],
+            'recommendations': self._generate_personal_recommendations(user_stats),
+            'tier': user.tier,
+            'next_tier_benefits': self._get_upgrade_benefits(user.tier)
+        }
+
+
+# ============================================
+# API MONETIZATION SYSTEM
+# ============================================
+
+
+class APIMonetizationService:
+    """Manage API access and usage-based billing"""
+    
+    def __init__(self, redis_client, stripe_client):
+        self.redis = redis_client
+        self.stripe = stripe_client
+        
+    async def check_api_limits(self, user: User) -> bool:
+        """Check if user has remaining API calls"""
+        if user.tier == SubscriptionTier.syndicate:
+            return True  # Unlimited for Syndicate
+        
+        monthly_usage = await self._get_monthly_api_usage(user.id)
+        limits = {
+            SubscriptionTier.free: 100,
+            SubscriptionTier.pro: 1000,
+            SubscriptionTier.syndicate: float('inf')
+        }
+        
+        return monthly_usage < limits[user.tier]
+    
+    async def record_api_call(self, user: User, endpoint: str, response_size: int):
+        """Record API call for billing and analytics"""
+        await self.redis.incr(f"api_calls:{user.id}:{datetime.now().strftime('%Y-%m')}")
+        
+        # Record detailed usage for Pro/Syndicate billing
+        if user.tier in [SubscriptionTier.pro, SubscriptionTier.syndicate]:
+            await self._record_detailed_usage(user.id, endpoint, response_size)
+    
+    async def calculate_usage_charges(self, user: User) -> float:
+        """Calculate additional usage charges for Pro users"""
+        if user.tier == SubscriptionTier.free:
+            return 0.0
+        
+        base_limits = {
+            SubscriptionTier.pro: 1000,
+            SubscriptionTier.syndicate: float('inf')
+        }
+        
+        monthly_usage = await self._get_monthly_api_usage(user.id)
+        overage = max(0, monthly_usage - base_limits[user.tier])
+        
+        # $0.10 per call over limit for Pro users
+        if user.tier == SubscriptionTier.pro:
+            return overage * 0.10
+        
+        return 0.0  # Syndicate has unlimited
+
+
+# ============================================
+# NOTIFICATION & ENGAGEMENT SYSTEM
+# ============================================
+
+
+class NotificationService:
+    """Manage user notifications and engagement"""
+    
+    def __init__(self, email_service, push_service):
+        self.email = email_service
+        self.push = push_service
+        
+    async def send_signal_alert(self, user: User, signal: Dict):
+        """Send real-time signal alerts to paid users"""
+        if user.tier == SubscriptionTier.free:
+            return  # No real-time alerts for free users
+        
+        # Customize message based on tier
+        if user.tier == SubscriptionTier.pro:
+            message = f"🎯 New signal: {signal['event']} - {signal['confidence']}% confidence"
+        else:  # Syndicate
+            message = f"🌟 Quantum signal: {signal['event']} - Enhanced analysis available"
+        
+        await self.push.send_notification(user.id, {
+            'title': 'LUCY Signal Alert',
+            'body': message,
+            'data': {'signal_id': signal['id'], 'tier': user.tier}
+        })
+    
+    async def send_performance_update(self, user: User):
+        """Send weekly performance updates"""
+        report = await self._generate_performance_summary(user)
+        
+        await self.email.send_template(user.email, 'weekly_performance', {
+            'accuracy': report['accuracy'],
+            'profit': report['profit'],
+            'best_signal': report['best_signal'],
+            'upgrade_cta': report['upgrade_cta'] if user.tier != SubscriptionTier.syndicate else None
+        })
+
+
+# ============================================
+# STRIPE INTEGRATION FOR SUBSCRIPTIONS
+# ============================================
+
+
+class SubscriptionManager:
+    """Manage Stripe subscriptions and billing"""
+    
+    def __init__(self, stripe_client, db_session):
+        self.stripe = stripe_client
+        self.db = db_session
+        
+    async def create_subscription(self, user: User, tier: SubscriptionTier, payment_method: str):
+        """Create new subscription with Stripe"""
+        price_ids = {
+            SubscriptionTier.pro: 'price_pro_monthly',  # $49/month
+            SubscriptionTier.syndicate: 'price_syndicate_monthly'  # $249/month
+        }
+        
+        try:
+            # Create Stripe customer if doesn't exist
+            customer = await self._get_or_create_customer(user)
+            
+            # Create subscription
+            subscription = self.stripe.Subscription.create(
+                customer=customer.id,
+                items=[{'price': price_ids[tier]}],
+                payment_method=payment_method,
+                expand=['latest_invoice.payment_intent'],
+                trial_period_days=7 if tier == SubscriptionTier.pro else 0
+            )
+            
+            # Update user in database
+            await self._update_user_subscription(user.id, tier, subscription.id)
+            
+            return subscription
+            
+        except stripe.error.StripeError as e:
+            raise HTTPException(status_code=400, detail=f"Payment failed: {str(e)}")
+    
+    async def handle_webhook(self, event: Dict):
+        """Handle Stripe webhook events"""
+        if event['type'] == 'customer.subscription.deleted':
+            # Downgrade user to free tier
+            await self._downgrade_user(event['data']['object']['customer'])
+        
+        elif event['type'] == 'invoice.payment_succeeded':
+            # Confirm subscription is active
+            await self._confirm_subscription_active(event['data']['object']['customer'])
+        
+        elif event['type'] == 'invoice.payment_failed':
+            # Handle failed payment
+            await self._handle_payment_failure(event['data']['object']['customer'])
+
+
+# ============================================
+# MAIN APPLICATION WITH REVENUE FEATURES
+# ============================================
+
+
+app = FastAPI(title="LUCY SaaS Platform", version="6.0")
+
+
+# Initialize services
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+stripe.api_key = "sk_test_..." # Your Stripe secret key
+
+
+signal_service = SignalDeliveryService(redis_client, quantum_engine=None)
+conversion_optimizer = ConversionOptimizer(db_session=None, notification_service=None)
+performance_tracker = PerformanceTracker(db_session=None)
+api_monetization = APIMonetizationService(redis_client, stripe)
+subscription_manager = SubscriptionManager(stripe, db_session=None)
+
+
+@app.get("/signals/{user_id}")
+async def get_user_signals(user_id: str):
+    """Get signals based on user's subscription tier"""
+    user = await get_user(user_id)
+    signals = await signal_service.get_signals_for_user(user)
+    
+    # Track engagement for conversion optimization
+    await conversion_optimizer.track_user_engagement(user, 'signal_view')
+    
+    return {"signals": signals, "tier": user.tier, "count": len(signals)}
+
+
+@app.get("/performance/public")
+async def get_public_performance():
+    """Public performance stats for marketing"""
+    stats = await performance_tracker.get_public_performance_stats()
+    return stats
+
+
+@app.post("/subscribe")
+async def create_subscription(user_id: str, tier: SubscriptionTier, payment_method: str):
+    """Create new subscription"""
+    user = await get_user(user_id)
+    subscription = await subscription_manager.create_subscription(user, tier, payment_method)
+    return {"subscription_id": subscription.id, "status": subscription.status}
+
+
+@app.get("/api/signals")
+async def api_get_signals(user_id: str):
+    """API endpoint with usage tracking"""
+    user = await get_user(user_id)
+    
+    # Check API limits
+    if not await api_monetization.check_api_limits(user):
+        raise HTTPException(status_code=429, detail="API limit exceeded")
+    
+    # Get signals
+    signals = await signal_service.get_signals_for_user(user)
+    
+    # Record API usage
+    await api_monetization.record_api_call(user, "/api/signals", len(str(signals)))
+    await conversion_optimizer.track_user_engagement(user, 'api_call')
+    
+    return {"signals": signals, "usage": user.api_calls_used}
+
+
+@app.get("/user/{user_id}/report")
+async def get_user_performance_report(user_id: str):
+    """Personalized performance report"""
+    user = await get_user

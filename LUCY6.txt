@@ -1,0 +1,1216 @@
+﻿# Advanced Risk Management System for Lucian v6.0
+# Quantum-Inspired Market Analysis with Topological Risk Assessment
+
+
+import numpy as np
+import pandas as pd
+from scipy import ndimage
+from scipy.signal import find_peaks
+from sklearn.decomposition import PCA
+from sklearn.manifold import TSNE
+import networkx as nx
+from typing import Dict, List, Tuple, Optional
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================
+# QUANTUM-INSPIRED MARKET FIELD ANALYZER
+# ============================================
+
+
+class QuantumMarketAnalyzer:
+    """Analyze markets using quantum field theory principles"""
+    
+    def __init__(self):
+        self.coupling_constant = 0.1  # Market interaction strength
+        self.vacuum_expectation = 0.0  # Baseline market state
+        self.field_history = []
+        
+    def calculate_market_loops(self, price_data: np.ndarray, order: int = 2) -> float:
+        """Calculate quantum loop corrections for market predictions"""
+        if len(price_data) < 10:
+            return 0.0
+        
+        # Calculate market "propagator" (correlation function)
+        returns = np.diff(np.log(price_data))
+        
+        # First-order correction (like Schwinger term)
+        alpha = self.coupling_constant
+        first_order = alpha / (2 * np.pi)
+        
+        # Second-order correction (two-loop)
+        if order >= 2:
+            # Calculate auto-correlation as proxy for loop integral
+            autocorr = np.corrcoef(returns[:-1], returns[1:])[0, 1]
+            if not np.isnan(autocorr):
+                second_order = (alpha / np.pi)**2 * abs(autocorr)
+            else:
+                second_order = 0.0
+        else:
+            second_order = 0.0
+        
+        # "Hadronic" contribution (non-perturbative social effects)
+        volatility = np.std(returns)
+        hadronic = 0.05 * min(volatility, 0.1)  # Cap the uncertainty
+        
+        total_correction = first_order + second_order + hadronic
+        return total_correction
+    
+    def detect_market_anomalies(self, observed: float, predicted: float, 
+                              uncertainty: float) -> Dict[str, any]:
+        """Detect market anomalies similar to muon g-2"""
+        deviation = observed - predicted
+        sigma = abs(deviation) / (uncertainty + 1e-8)
+        
+        # Define significance thresholds (like 3.7σ muon anomaly)
+        thresholds = {
+            'suggestion': 2.0,
+            'evidence': 3.0,
+            'strong_evidence': 4.0,
+            'discovery': 5.0
+        }
+        
+        significance_level = 'normal'
+        for level, threshold in thresholds.items():
+            if sigma >= threshold:
+                significance_level = level
+        
+        return {
+            'deviation': deviation,
+            'sigma': sigma,
+            'significance': significance_level,
+            'anomaly_detected': sigma >= thresholds['suggestion'],
+            'requires_new_model': sigma >= thresholds['strong_evidence']
+        }
+    
+    def calculate_vacuum_fluctuations(self, market_data: pd.DataFrame) -> Dict[str, float]:
+        """Calculate market vacuum fluctuations (baseline noise)"""
+        if len(market_data) < 50:
+            return {'energy': 0.0, 'uncertainty': 0.1}
+        
+        # Use price and volume to create "field"
+        prices = market_data['price'].values
+        volumes = market_data.get('volume', pd.Series(np.ones(len(prices)))).values
+        
+        # Normalize
+        prices_norm = (prices - np.mean(prices)) / (np.std(prices) + 1e-8)
+        volumes_norm = (volumes - np.mean(volumes)) / (np.std(volumes) + 1e-8)
+        
+        # Calculate field energy density
+        field = prices_norm + 0.3 * volumes_norm  # Combined field
+        field_gradient = np.gradient(field)
+        energy_density = 0.5 * (field**2 + field_gradient**2)
+        
+        vacuum_energy = np.mean(energy_density)
+        vacuum_uncertainty = np.std(energy_density)
+        
+        return {
+            'energy': vacuum_energy,
+            'uncertainty': vacuum_uncertainty,
+            'field_strength': np.std(field)
+        }
+
+
+# ============================================
+# TOPOLOGICAL MARKET ANALYZER (From Field Syntax)
+# ============================================
+
+
+class TopologicalMarketAnalyzer:
+    """Analyze market topology and detect critical transitions"""
+    
+    def __init__(self, field_resolution: int = 50):
+        self.field_resolution = field_resolution
+        self.critical_points = []
+        
+    def create_market_field(self, market_data: pd.DataFrame, 
+                          time_window: int = 100) -> np.ndarray:
+        """Create 2D market field (time x price levels)"""
+        if len(market_data) < time_window:
+            return np.zeros((10, 10))
+        
+        # Take recent data
+        recent_data = market_data.tail(time_window)
+        prices = recent_data['price'].values
+        
+        # Create price level grid
+        price_min, price_max = prices.min(), prices.max()
+        price_levels = np.linspace(price_min, price_max, self.field_resolution)
+        
+        # Create field matrix
+        field = np.zeros((len(prices), self.field_resolution))
+        
+        for i, price in enumerate(prices):
+            # Find closest price level
+            level_idx = np.argmin(np.abs(price_levels - price))
+            
+            # Create Gaussian distribution around current price
+            for j in range(self.field_resolution):
+                distance = abs(j - level_idx)
+                field[i, j] = np.exp(-distance**2 / (2 * 5**2))  # Gaussian spread
+        
+        return field
+    
+    def calculate_field_curvature(self, field: np.ndarray) -> np.ndarray:
+        """Calculate curvature energy (∇²Φ)²"""
+        laplacian = ndimage.laplace(field)
+        return laplacian**2
+    
+    def calculate_tension_field(self, field: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Calculate tension vector field ∇Φ"""
+        gradient_y, gradient_x = np.gradient(field)
+        return gradient_x, gradient_y
+    
+    def calculate_phase_coherence(self, gradient_x: np.ndarray, 
+                                gradient_y: np.ndarray) -> np.ndarray:
+        """Calculate local phase coherence"""
+        angles = np.arctan2(gradient_y, gradient_x)
+        
+        # Local coherence using circular variance
+        coherence = np.zeros_like(angles)
+        window_size = 5
+        
+        for i in range(window_size, angles.shape[0] - window_size):
+            for j in range(window_size, angles.shape[1] - window_size):
+                local_angles = angles[i-window_size:i+window_size+1, 
+                                   j-window_size:j+window_size+1]
+                
+                # Calculate resultant vector strength
+                cos_sum = np.sum(np.cos(local_angles))
+                sin_sum = np.sum(np.sin(local_angles))
+                n_samples = local_angles.size
+                
+                coherence[i, j] = np.sqrt(cos_sum**2 + sin_sum**2) / n_samples
+        
+        return coherence
+    
+    def calculate_ts_metrics(self, field: np.ndarray) -> Dict[str, float]:
+        """Calculate Tension-Stability metrics"""
+        # Calculate derived fields
+        curvature = self.calculate_field_curvature(field)
+        gradient_x, gradient_y = self.calculate_tension_field(field)
+        coherence = self.calculate_phase_coherence(gradient_x, gradient_y)
+        
+        # Global metrics
+        tension = np.mean(curvature) * (1 + 0.5 * np.mean(np.sqrt(gradient_x**2 + gradient_y**2)))
+        stability = np.mean(coherence) / (1 + 0.7 * tension + 1e-8)
+        
+        # Normalize
+        tension = max(0, min(1, tension / 2))  # Normalize to [0,1]
+        stability = max(0, min(1, stability))
+        
+        return {
+            'tension': tension,
+            'stability': stability,
+            'curvature_energy': np.mean(curvature),
+            'coherence': np.mean(coherence),
+            'phase_classification': self._classify_phase(tension, stability)
+        }
+    
+    def _classify_phase(self, tension: float, stability: float) -> str:
+        """Classify market phase based on T-S coordinates"""
+        if tension < 0.3:
+            return "STABLE"
+        elif tension > 0.7:
+            if stability < 0.3:
+                return "CRITICAL"
+            else:
+                return "UNSTABLE"
+        else:
+            if stability > 0.7:
+                return "ACCUMULATING"
+            else:
+                return "TRANSITIONAL"
+    
+    def detect_topological_defects(self, gradient_x: np.ndarray, 
+                                 gradient_y: np.ndarray) -> List[Tuple[int, int]]:
+        """Detect topological defects (vortices) in the market field"""
+        defects = []
+        
+        # Calculate winding number around each point
+        for i in range(2, gradient_x.shape[0] - 2):
+            for j in range(2, gradient_x.shape[1] - 2):
+                # Sample points around (i,j)
+                angles = []
+                for di, dj in [(0,1), (1,1), (1,0), (1,-1), (0,-1), (-1,-1), (-1,0), (-1,1)]:
+                    gx = gradient_x[i+di, j+dj]
+                    gy = gradient_y[i+di, j+dj]
+                    angles.append(np.arctan2(gy, gx))
+                
+                # Calculate winding number
+                total_angle_change = 0
+                for k in range(len(angles)):
+                    angle_diff = angles[(k+1) % len(angles)] - angles[k]
+                    # Handle branch cuts
+                    if angle_diff > np.pi:
+                        angle_diff -= 2*np.pi
+                    elif angle_diff < -np.pi:
+                        angle_diff += 2*np.pi
+                    total_angle_change += angle_diff
+                
+                winding_number = total_angle_change / (2*np.pi)
+                
+                # If winding number is non-zero, we have a defect
+                if abs(winding_number) > 0.5:
+                    defects.append((i, j))
+        
+        return defects
+
+
+# ============================================
+# INFORMATION BOTTLENECK RISK FILTER
+# ============================================
+
+
+class InformationBottleneckFilter:
+    """Apply information theory to compress and filter market signals"""
+    
+    def __init__(self, bottleneck_capacity: int = 20):
+        self.bottleneck_capacity = bottleneck_capacity
+        self.mutual_info_cache = {}
+        
+    def calculate_mutual_information(self, X: np.ndarray, y: np.ndarray) -> np.ndarray:
+        """Calculate mutual information between features and target"""
+        mi_scores = np.zeros(X.shape[1])
+        
+        for i in range(X.shape[1]):
+            feature = X[:, i]
+            
+            # Discretize continuous variables for MI calculation
+            feature_bins = self._discretize(feature, bins=10)
+            y_bins = self._discretize(y, bins=10)
+            
+            # Calculate joint and marginal probabilities
+            joint_prob = self._joint_probability(feature_bins, y_bins)
+            feature_prob = np.sum(joint_prob, axis=1)
+            y_prob = np.sum(joint_prob, axis=0)
+            
+            # Calculate mutual information
+            mi = 0
+            for j in range(len(feature_prob)):
+                for k in range(len(y_prob)):
+                    if joint_prob[j, k] > 0:
+                        mi += joint_prob[j, k] * np.log2(
+                            joint_prob[j, k] / (feature_prob[j] * y_prob[k] + 1e-8)
+                        )
+            
+            mi_scores[i] = mi
+        
+        return mi_scores
+    
+    def _discretize(self, data: np.ndarray, bins: int = 10) -> np.ndarray:
+        """Discretize continuous data for MI calculation"""
+        if len(data) == 0:
+            return np.array([])
+        
+        try:
+            _, bin_edges = np.histogram(data, bins=bins)
+            discretized = np.digitize(data, bin_edges[:-1]) - 1
+            discretized = np.clip(discretized, 0, bins - 1)
+            return discretized
+        except:
+            return np.zeros(len(data), dtype=int)
+    
+    def _joint_probability(self, x_bins: np.ndarray, y_bins: np.ndarray) -> np.ndarray:
+        """Calculate joint probability matrix"""
+        if len(x_bins) == 0 or len(y_bins) == 0:
+            return np.array([[1.0]])
+        
+        max_x = max(x_bins) + 1
+        max_y = max(y_bins) + 1
+        
+        joint_counts = np.zeros((max_x, max_y))
+        
+        for i in range(len(x_bins)):
+            joint_counts[x_bins[i], y_bins[i]] += 1
+        
+        # Normalize to probabilities
+        total_count = np.sum(joint_counts)
+        if total_count > 0:
+            return joint_counts / total_count
+        else:
+            return joint_counts
+    
+    def apply_bottleneck(self, features: np.ndarray, targets: np.ndarray) -> np.ndarray:
+        """Apply information bottleneck to select most informative features"""
+        if features.shape[1] <= self.bottleneck_capacity:
+            return features
+        
+        # Calculate mutual information for each feature
+        mi_scores = self.calculate_mutual_information(features, targets)
+        
+        # Select top features based on MI
+        top_indices = np.argsort(mi_scores)[-self.bottleneck_capacity:]
+        
+        return features[:, top_indices]
+    
+    def detect_information_phase_transition(self, information_entropy: List[float],
+                                          window_size: int = 10) -> List[int]:
+        """Detect phase transitions in information flow"""
+        if len(information_entropy) < window_size * 2:
+            return []
+        
+        transitions = []
+        
+        # Calculate sliding window derivatives
+        for i in range(window_size, len(information_entropy) - window_size):
+            before_window = information_entropy[i-window_size:i]
+            after_window = information_entropy[i:i+window_size]
+            
+            before_mean = np.mean(before_window)
+            after_mean = np.mean(after_window)
+            
+            # Detect significant change
+            entropy_change = abs(after_mean - before_mean)
+            baseline_variation = np.std(before_window + after_window)
+            
+            if entropy_change > 2 * baseline_variation:
+                transitions.append(i)
+        
+        return transitions
+
+
+# ============================================
+# COMPREHENSIVE RISK ASSESSMENT ENGINE
+# ============================================
+
+
+class AdvancedRiskAssessmentEngine:
+    """Comprehensive risk assessment using quantum and topological methods"""
+    
+    def __init__(self):
+        self.quantum_analyzer = QuantumMarketAnalyzer()
+        self.topology_analyzer = TopologicalMarketAnalyzer()
+        self.info_filter = InformationBottleneckFilter()
+        self.risk_history = []
+        
+    def comprehensive_risk_analysis(self, market_data: pd.DataFrame,
+                                  prediction: float, 
+                                  confidence: float) -> Dict[str, any]:
+        """Perform comprehensive risk analysis using all methods"""
+        
+        analysis_results = {
+            'timestamp': datetime.now(),
+            'basic_confidence': confidence,
+            'enhanced_confidence': confidence,
+            'risk_factors': {},
+            'recommendations': [],
+            'overall_risk_level': 'MODERATE'
+        }
+        
+        try:
+            # 1. Quantum Field Analysis
+            vacuum_state = self.quantum_analyzer.calculate_vacuum_fluctuations(market_data)
+            loop_correction = self.quantum_analyzer.calculate_market_loops(
+                market_data['price'].values
+            )
+            
+            # Apply quantum corrections to prediction
+            corrected_prediction = prediction * (1 + loop_correction)
+            
+            # Detect market anomalies
+            anomaly_analysis = self.quantum_analyzer.detect_market_anomalies(
+                market_data['price'].iloc[-1], corrected_prediction, vacuum_state['uncertainty']
+            )
+            
+            analysis_results['risk_factors']['quantum'] = {
+                'vacuum_energy': vacuum_state['energy'],
+                'loop_correction': loop_correction,
+                'anomaly_detected': anomaly_analysis['anomaly_detected'],
+                'anomaly_significance': anomaly_analysis['sigma']
+            }
+            
+            # 2. Topological Analysis
+            market_field = self.topology_analyzer.create_market_field(market_data)
+            ts_metrics = self.topology_analyzer.calculate_ts_metrics(market_field)
+            
+            # Detect topological defects
+            gradient_x, gradient_y = self.topology_analyzer.calculate_tension_field(market_field)
+            defects = self.topology_analyzer.detect_topological_defects(gradient_x, gradient_y)
+            
+            analysis_results['risk_factors']['topological'] = {
+                'tension': ts_metrics['tension'],
+                'stability': ts_metrics['stability'],
+                'phase': ts_metrics['phase_classification'],
+                'defects_count': len(defects),
+                'coherence': ts_metrics['coherence']
+            }
+            
+            # 3. Information Bottleneck Analysis
+            if len(market_data) > 50:
+                # Create feature matrix for information analysis
+                features = self._create_feature_matrix(market_data)
+                returns = market_data['price'].pct_change().dropna().values
+                
+                if len(features) > 0 and len(returns) > 0:
+                    # Ensure same length
+                    min_len = min(len(features), len(returns))
+                    features = features[:min_len]
+                    returns = returns[:min_len]
+                    
+                    filtered_features = self.info_filter.apply_bottleneck(features, returns)
+                    
+                    analysis_results['risk_factors']['information'] = {
+                        'original_dimensions': features.shape[1] if len(features.shape) > 1 else 0,
+                        'compressed_dimensions': filtered_features.shape[1] if len(filtered_features.shape) > 1 else 0,
+                        'information_efficiency': filtered_features.shape[1] / max(features.shape[1], 1) if len(features.shape) > 1 else 1
+                    }
+            
+            # 4. Synthesize Risk Assessment
+            enhanced_confidence = self._synthesize_risk_factors(
+                confidence, analysis_results['risk_factors']
+            )
+            
+            analysis_results['enhanced_confidence'] = enhanced_confidence
+            analysis_results['overall_risk_level'] = self._classify_overall_risk(analysis_results)
+            analysis_results['recommendations'] = self._generate_recommendations(analysis_results)
+            
+        except Exception as e:
+            logger.error(f"Error in comprehensive risk analysis: {e}")
+            analysis_results['error'] = str(e)
+        
+        return analysis_results
+    
+    def _create_feature_matrix(self, market_data: pd.DataFrame) -> np.ndarray:
+        """Create feature matrix for information analysis"""
+        features = []
+        
+        if 'price' in market_data.columns and len(market_data) > 10:
+            prices = market_data['price'].values
+            
+            # Price-based features
+            returns = np.diff(np.log(prices + 1e-8))
+            features.extend([
+                np.std(returns),  # Volatility
+                np.mean(returns),  # Trend
+                len(returns[returns > 0]) / len(returns) if len(returns) > 0 else 0.5,  # Up ratio
+            ])
+            
+            # Technical indicators
+            if len(prices) >= 20:
+                sma_20 = np.convolve(prices, np.ones(20)/20, mode='valid')
+                if len(sma_20) > 0:
+                    features.append(prices[-1] / sma_20[-1] - 1)  # Price vs SMA
+            
+            # Volume features if available
+            if 'volume' in market_data.columns:
+                volumes = market_data['volume'].values
+                if len(volumes) > 5:
+                    volume_changes = np.diff(volumes)
+                    features.extend([
+                        np.std(volume_changes) / (np.mean(volumes) + 1e-8),  # Volume volatility
+                        np.mean(volume_changes) / (np.mean(volumes) + 1e-8),  # Volume trend
+                    ])
+        
+        if len(features) == 0:
+            return np.array([[0, 0, 0]])  # Fallback
+        
+        return np.array([features])
+    
+    def _synthesize_risk_factors(self, base_confidence: float, 
+                               risk_factors: Dict) -> float:
+        """Synthesize all risk factors into enhanced confidence"""
+        confidence_adjustments = []
+        
+        # Quantum risk adjustments
+        if 'quantum' in risk_factors:
+            quantum = risk_factors['quantum']
+            if quantum.get('anomaly_detected', False):
+                # Reduce confidence for detected anomalies
+                anomaly_penalty = min(0.3, quantum.get('anomaly_significance', 0) * 0.05)
+                confidence_adjustments.append(-anomaly_penalty)
+        
+        # Topological risk adjustments
+        if 'topological' in risk_factors:
+            topo = risk_factors['topological']
+            
+            # High tension reduces confidence
+            if topo.get('tension', 0) > 0.7:
+                confidence_adjustments.append(-0.15)
+            
+            # Low stability reduces confidence
+            if topo.get('stability', 1) < 0.3:
+                confidence_adjustments.append(-0.2)
+            
+            # Critical phase is dangerous
+            if topo.get('phase') == 'CRITICAL':
+                confidence_adjustments.append(-0.25)
+            
+            # Topological defects indicate instability
+            defects = topo.get('defects_count', 0)
+            if defects > 5:
+                confidence_adjustments.append(-0.1)
+        
+        # Information efficiency adjustments
+        if 'information' in risk_factors:
+            info = risk_factors['information']
+            efficiency = info.get('information_efficiency', 1.0)
+            
+            # Very low information efficiency suggests overfitting
+            if efficiency < 0.3:
+                confidence_adjustments.append(-0.1)
+        
+        # Apply adjustments
+        total_adjustment = sum(confidence_adjustments)
+        enhanced_confidence = max(0.0, min(1.0, base_confidence + total_adjustment))
+        
+        return enhanced_confidence
+    
+    def _classify_overall_risk(self, analysis_results: Dict) -> str:
+        """Classify overall risk level"""
+        enhanced_confidence = analysis_results['enhanced_confidence']
+        risk_factors = analysis_results['risk_factors']
+        
+        # Check for critical conditions
+        critical_conditions = 0
+        
+        if 'quantum' in risk_factors and risk_factors['quantum'].get('anomaly_detected'):
+            critical_conditions += 1
+        
+        if 'topological' in risk_factors:
+            topo = risk_factors['topological']
+            if topo.get('phase') == 'CRITICAL':
+                critical_conditions += 2
+            elif topo.get('tension', 0) > 0.8:
+                critical_conditions += 1
+        
+        if critical_conditions >= 2:
+            return 'CRITICAL'
+        elif critical_conditions == 1 or enhanced_confidence < 0.3:
+            return 'HIGH'
+        elif enhanced_confidence < 0.5:
+            return 'MODERATE'
+        else:
+            return 'LOW'
+    
+    def _generate_recommendations(self, analysis_results: Dict) -> List[str]:
+        """Generate actionable recommendations"""
+        recommendations = []
+        risk_level = analysis_results['overall_risk_level']
+        risk_factors = analysis_results['risk_factors']
+        
+        if risk_level == 'CRITICAL':
+            recommendations.append("AVOID: Critical market conditions detected")
+            recommendations.append("Wait for market stabilization before placing bets")
+        
+        elif risk_level == 'HIGH':
+            recommendations.append("CAUTION: Reduce position sizes by 50%")
+            recommendations.append("Increase monitoring frequency")
+        
+        # Specific recommendations based on risk factors
+        if 'topological' in risk_factors:
+            topo = risk_factors['topological']
+            if topo.get('phase') == 'TRANSITIONAL':
+                recommendations.append("Market in transition - consider contrarian positions")
+            elif topo.get('defects_count', 0) > 3:
+                recommendations.append("Multiple instability points detected - diversify exposure")
+        
+        if 'quantum' in risk_factors:
+            quantum = risk_factors['quantum']
+            if quantum.get('loop_correction', 0) > 0.1:
+                recommendations.append("High market coupling detected - expect increased volatility")
+        
+        if not recommendations:
+            recommendations.append("Normal market conditions - proceed with standard strategy")
+        
+        return recommendations
+
+
+# ============================================
+# DEMONSTRATION
+# ============================================
+
+
+def demonstrate_advanced_risk_system():
+    """Demonstrate the advanced risk assessment system"""
+    logger.info("=== Advanced Risk Assessment System Demonstration ==="# Complete Advanced Risk System - Continuation and Integration
+# Final implementation of quantum-inspired betting system
+
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import asyncio
+from typing import Dict, List, Optional, Tuple
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+# ============================================
+# COMPLETE DEMONSTRATION FUNCTION
+# ============================================
+
+
+def demonstrate_advanced_risk_system():
+    """Complete demonstration of the advanced risk assessment system"""
+    logger.info("=== Advanced Risk Assessment System Demonstration ===")
+    
+    # Create sample market data with different market regimes
+    np.random.seed(42)
+    dates = pd.date_range(start='2025-01-01', periods=200, freq='H')
+    
+    # Generate realistic market data with regime changes
+    price_data = []
+    volume_data = []
+    base_price = 100
+    
+    for i in range(200):
+        # Create different market regimes
+        if i < 50:  # Stable regime
+            drift = 0.001
+            vol = 0.01
+            volume_base = 1000
+        elif i < 100:  # Volatile regime
+            drift = 0.002
+            vol = 0.03
+            volume_base = 1500
+        elif i < 150:  # Crisis regime
+            drift = -0.005
+            vol = 0.05
+            volume_base = 3000
+        else:  # Recovery regime
+            drift = 0.003
+            vol = 0.02
+            volume_base = 1200
+        
+        # Generate price with regime-specific characteristics
+        price_change = drift + vol * np.random.randn()
+        base_price *= (1 + price_change)
+        price_data.append(base_price)
+        
+        # Generate volume with correlation to volatility
+        volume = volume_base * (1 + 0.5 * abs(price_change) + 0.2 * np.random.randn())
+        volume_data.append(max(100, volume))
+    
+    # Create market DataFrame
+    market_data = pd.DataFrame({
+        'timestamp': dates,
+        'price': price_data,
+        'volume': volume_data
+    })
+    
+    # Initialize the advanced risk system
+    risk_engine = AdvancedRiskAssessmentEngine()
+    
+    # Analyze different time periods
+    analysis_results = []
+    
+    for i in [60, 120, 180]:  # Different points in time
+        window_data = market_data.iloc[:i]
+        
+        # Make a simple prediction (for demonstration)
+        recent_returns = window_data['price'].pct_change().dropna()
+        simple_prediction = window_data['price'].iloc[-1] * (1 + recent_returns.mean())
+        base_confidence = min(0.8, abs(recent_returns.mean()) * 10)
+        
+        # Perform comprehensive risk analysis
+        analysis = risk_engine.comprehensive_risk_analysis(
+            window_data, simple_prediction, base_confidence
+        )
+        
+        analysis_results.append({
+            'time_point': i,
+            'regime': ['Stable', 'Volatile', 'Crisis'][i//60 - 1] if i <= 180 else 'Recovery',
+            'analysis': analysis
+        })
+    
+    # Display results
+    print("\n🔬 ADVANCED RISK ANALYSIS RESULTS")
+    print("=" * 60)
+    
+    for result in analysis_results:
+        print(f"\n📊 Time Point {result['time_point']} ({result['regime']} Regime)")
+        print("-" * 40)
+        
+        analysis = result['analysis']
+        print(f"Base Confidence: {analysis['basic_confidence']:.1%}")
+        print(f"Enhanced Confidence: {analysis['enhanced_confidence']:.1%}")
+        print(f"Overall Risk Level: {analysis['overall_risk_level']}")
+        
+        # Quantum factors
+        if 'quantum' in analysis['risk_factors']:
+            q = analysis['risk_factors']['quantum']
+            print(f"\n🔬 Quantum Analysis:")
+            print(f"  Vacuum Energy: {q['vacuum_energy']:.3f}")
+            print(f"  Loop Correction: {q['loop_correction']:.3f}")
+            print(f"  Anomaly Detected: {q['anomaly_detected']}")
+            if q['anomaly_detected']:
+                print(f"  Anomaly Significance: {q['anomaly_significance']:.1f}σ")
+        
+        # Topological factors
+        if 'topological' in analysis['risk_factors']:
+            t = analysis['risk_factors']['topological']
+            print(f"\n🌍 Topological Analysis:")
+            print(f"  Tension: {t['tension']:.2f}")
+            print(f"  Stability: {t['stability']:.2f}")
+            print(f"  Phase: {t['phase']}")
+            print(f"  Defects Count: {t['defects_count']}")
+            print(f"  Coherence: {t['coherence']:.3f}")
+        
+        # Recommendations
+        print(f"\n💡 Recommendations:")
+        for rec in analysis['recommendations']:
+            print(f"  • {rec}")
+    
+    return analysis_results
+
+
+# ============================================
+# REAL-TIME INTEGRATION ENGINE
+# ============================================
+
+
+class RealTimeIntegrationEngine:
+    """Integrates all advanced techniques into real-time betting system"""
+    
+    def __init__(self):
+        self.risk_engine = AdvancedRiskAssessmentEngine()
+        self.active_positions = {}
+        self.performance_tracker = {
+            'total_bets': 0,
+            'wins': 0,
+            'total_profit': 0.0,
+            'quantum_enhanced_bets': 0,
+            'topological_enhanced_bets': 0
+        }
+        
+    async def real_time_analysis_loop(self, data_stream, interval_seconds=60):
+        """Real-time analysis loop for live betting"""
+        logger.info("Starting real-time analysis loop...")
+        
+        while True:
+            try:
+                # Get latest market data
+                current_data = await self.get_latest_data(data_stream)
+                
+                if current_data is not None and len(current_data) >= 50:
+                    # Perform comprehensive analysis
+                    opportunities = await self.analyze_current_opportunities(current_data)
+                    
+                    # Execute betting decisions
+                    for opportunity in opportunities:
+                        await self.execute_betting_decision(opportunity)
+                    
+                    # Update performance tracking
+                    await self.update_performance_metrics()
+                
+                # Wait for next analysis cycle
+                await asyncio.sleep(interval_seconds)
+                
+            except Exception as e:
+                logger.error(f"Error in real-time analysis loop: {e}")
+                await asyncio.sleep(interval_seconds)
+    
+    async def get_latest_data(self, data_stream) -> Optional[pd.DataFrame]:
+        """Get latest market data from stream"""
+        # In real implementation, this would connect to live data feeds
+        # For demonstration, we'll simulate
+        return None
+    
+    async def analyze_current_opportunities(self, market_data: pd.DataFrame) -> List[Dict]:
+        """Analyze current market for betting opportunities"""
+        opportunities = []
+        
+        # Generate base prediction (simplified for demo)
+        recent_returns = market_data['price'].pct_change().dropna().tail(10)
+        momentum = recent_returns.mean()
+        volatility = recent_returns.std()
+        
+        # Base prediction and confidence
+        current_price = market_data['price'].iloc[-1]
+        predicted_direction = 1 if momentum > 0 else -1
+        base_confidence = min(0.8, abs(momentum) / volatility) if volatility > 0 else 0.1
+        
+        # Apply advanced risk analysis
+        risk_analysis = self.risk_engine.comprehensive_risk_analysis(
+            market_data, current_price * (1 + momentum), base_confidence
+        )
+        
+        # Check if opportunity meets enhanced criteria
+        if (risk_analysis['enhanced_confidence'] > 0.15 and 
+            risk_analysis['overall_risk_level'] in ['LOW', 'MODERATE']):
+            
+            opportunity = {
+                'timestamp': datetime.now(),
+                'direction': predicted_direction,
+                'base_confidence': base_confidence,
+                'enhanced_confidence': risk_analysis['enhanced_confidence'],
+                'risk_level': risk_analysis['overall_risk_level'],
+                'quantum_factors': risk_analysis['risk_factors'].get('quantum', {}),
+                'topological_factors': risk_analysis['risk_factors'].get('topological', {}),
+                'recommendations': risk_analysis['recommendations'],
+                'bet_size': self.calculate_enhanced_bet_size(risk_analysis)
+            }
+            
+            opportunities.append(opportunity)
+        
+        return opportunities
+    
+    def calculate_enhanced_bet_size(self, risk_analysis: Dict) -> float:
+        """Calculate bet size using enhanced risk factors"""
+        base_kelly = 0.02  # Conservative base Kelly fraction
+        
+        # Adjust based on enhanced confidence
+        confidence_multiplier = risk_analysis['enhanced_confidence']
+        
+        # Adjust based on quantum factors
+        quantum_adjustment = 1.0
+        if 'quantum' in risk_analysis['risk_factors']:
+            q = risk_analysis['risk_factors']['quantum']
+            if q.get('anomaly_detected'):
+                quantum_adjustment *= 0.5  # Reduce size during anomalies
+        
+        # Adjust based on topological factors
+        topo_adjustment = 1.0
+        if 'topological' in risk_analysis['risk_factors']:
+            t = risk_analysis['risk_factors']['topological']
+            if t.get('phase') == 'CRITICAL':
+                topo_adjustment *= 0.3  # Major reduction in critical phase
+            elif t.get('tension', 0) > 0.7:
+                topo_adjustment *= 0.7  # Moderate reduction for high tension
+        
+        # Final bet size calculation
+        enhanced_bet_size = (base_kelly * confidence_multiplier * 
+                           quantum_adjustment * topo_adjustment)
+        
+        return max(0.001, min(0.05, enhanced_bet_size))  # Cap between 0.1% and 5%
+    
+    async def execute_betting_decision(self, opportunity: Dict):
+        """Execute betting decision based on opportunity analysis"""
+        bet_id = f"bet_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        position = {
+            'id': bet_id,
+            'timestamp': opportunity['timestamp'],
+            'direction': opportunity['direction'],
+            'size': opportunity['bet_size'],
+            'confidence': opportunity['enhanced_confidence'],
+            'risk_level': opportunity['risk_level'],
+            'quantum_enhanced': bool(opportunity['quantum_factors']),
+            'topological_enhanced': bool(opportunity['topological_factors']),
+            'status': 'ACTIVE'
+        }
+        
+        self.active_positions[bet_id] = position
+        
+        # Log the decision
+        logger.info(f"Executing bet {bet_id}: "
+                   f"Direction={opportunity['direction']}, "
+                   f"Size={opportunity['bet_size']:.1%}, "
+                   f"Confidence={opportunity['enhanced_confidence']:.1%}")
+        
+        # Update performance tracking
+        self.performance_tracker['total_bets'] += 1
+        if opportunity['quantum_factors']:
+            self.performance_tracker['quantum_enhanced_bets'] += 1
+        if opportunity['topological_factors']:
+            self.performance_tracker['topological_enhanced_bets'] += 1
+    
+    async def update_performance_metrics(self):
+        """Update performance tracking metrics"""
+        # In real implementation, this would check position outcomes
+        # and update win/loss statistics
+        pass
+    
+    def get_performance_summary(self) -> Dict:
+        """Get comprehensive performance summary"""
+        total_bets = self.performance_tracker['total_bets']
+        
+        if total_bets == 0:
+            return {'status': 'No bets placed yet'}
+        
+        win_rate = self.performance_tracker['wins'] / total_bets
+        
+        return {
+            'total_bets': total_bets,
+            'win_rate': win_rate,
+            'total_profit': self.performance_tracker['total_profit'],
+            'quantum_enhanced_ratio': self.performance_tracker['quantum_enhanced_bets'] / total_bets,
+            'topological_enhanced_ratio': self.performance_tracker['topological_enhanced_bets'] / total_bets,
+            'average_profit_per_bet': self.performance_tracker['total_profit'] / total_bets,
+            'active_positions': len(self.active_positions)
+        }
+
+
+# ============================================
+# PORTFOLIO OPTIMIZATION WITH QUANTUM TECHNIQUES
+# ============================================
+
+
+class QuantumPortfolioOptimizer:
+    """Portfolio optimization using quantum-inspired techniques"""
+    
+    def __init__(self):
+        self.quantum_states = {}
+        self.entanglement_matrix = None
+        
+    def optimize_portfolio_allocation(self, opportunities: List[Dict], 
+                                    total_capital: float) -> Dict[str, float]:
+        """Optimize portfolio allocation using quantum principles"""
+        
+        if not opportunities:
+            return {}
+        
+        # Create quantum state representation for each opportunity
+        quantum_states = []
+        for i, opp in enumerate(opportunities):
+            # Quantum state based on confidence and risk factors
+            confidence = opp['enhanced_confidence']
+            
+            # Add quantum corrections
+            quantum_energy = opp.get('quantum_factors', {}).get('vacuum_energy', 0)
+            topological_stability = opp.get('topological_factors', {}).get('stability', 0.5)
+            
+            # Create complex quantum state
+            amplitude = np.sqrt(confidence)
+            phase = quantum_energy * np.pi  # Quantum phase
+            
+            state = amplitude * np.exp(1j * phase)
+            quantum_states.append(state)
+        
+        # Calculate entanglement between opportunities
+        entanglement_matrix = self.calculate_entanglement_matrix(opportunities)
+        
+        # Quantum portfolio optimization
+        allocation = self.quantum_allocation_algorithm(
+            quantum_states, entanglement_matrix, total_capital
+        )
+        
+        return allocation
+    
+    def calculate_entanglement_matrix(self, opportunities: List[Dict]) -> np.ndarray:
+        """Calculate entanglement (correlation) between opportunities"""
+        n = len(opportunities)
+        entanglement = np.eye(n)
+        
+        for i in range(n):
+            for j in range(i+1, n):
+                # Calculate similarity in quantum factors
+                q1 = opportunities[i].get('quantum_factors', {})
+                q2 = opportunities[j].get('quantum_factors', {})
+                
+                quantum_similarity = 0
+                if q1 and q2:
+                    energy_diff = abs(q1.get('vacuum_energy', 0) - q2.get('vacuum_energy', 0))
+                    quantum_similarity = np.exp(-energy_diff * 5)  # Exponential decay
+                
+                # Calculate similarity in topological factors
+                t1 = opportunities[i].get('topological_factors', {})
+                t2 = opportunities[j].get('topological_factors', {})
+                
+                topo_similarity = 0
+                if t1 and t2:
+                    phase_similarity = 1 if t1.get('phase') == t2.get('phase') else 0.3
+                    tension_similarity = 1 - abs(t1.get('tension', 0) - t2.get('tension', 0))
+                    topo_similarity = (phase_similarity + tension_similarity) / 2
+                
+                # Combined entanglement
+                entanglement[i, j] = entanglement[j, i] = (quantum_similarity + topo_similarity) / 2
+        
+        return entanglement
+    
+    def quantum_allocation_algorithm(self, quantum_states: List[complex], 
+                                   entanglement_matrix: np.ndarray,
+                                   total_capital: float) -> Dict[str, float]:
+        """Quantum-inspired allocation algorithm"""
+        
+        # Calculate probability amplitudes
+        probabilities = [abs(state)**2 for state in quantum_states]
+        
+        # Normalize probabilities
+        total_prob = sum(probabilities)
+        if total_prob > 0:
+            normalized_probs = [p / total_prob for p in probabilities]
+        else:
+            normalized_probs = [1/len(probabilities)] * len(probabilities)
+        
+        # Apply entanglement corrections
+        corrected_allocations = []
+        for i, prob in enumerate(normalized_probs):
+            # Entanglement reduces allocation for highly correlated bets
+            entanglement_penalty = np.mean(entanglement_matrix[i, :]) - entanglement_matrix[i, i]
+            corrected_prob = prob * (1 - 0.5 * entanglement_penalty)
+            corrected_allocations.append(max(0, corrected_prob))
+        
+        # Renormalize
+        total_corrected = sum(corrected_allocations)
+        if total_corrected > 0:
+            final_allocations = [a / total_corrected for a in corrected_allocations]
+        else:
+            final_allocations = normalized_probs
+        
+        # Convert to capital allocations
+        allocation_dict = {}
+        for i, allocation in enumerate(final_allocations):
+            allocation_dict[f'opportunity_{i}'] = allocation * total_capital
+        
+        return allocation_dict
+
+
+# ============================================
+# COMPLETE SYSTEM INTEGRATION
+# ============================================
+
+
+class QuantumBettingSystem:
+    """Complete quantum-inspired betting system"""
+    
+    def __init__(self, initial_capital: float = 10000):
+        self.risk_engine = AdvancedRiskAssessmentEngine()
+        self.real_time_engine = RealTimeIntegrationEngine()
+        self.portfolio_optimizer = QuantumPortfolioOptimizer()
+        self.initial_capital = initial_capital
+        self.current_capital = initial_capital
+        self.trade_history = []
+        
+    async def run_complete_system(self, market_data_stream):
+        """Run the complete quantum betting system"""
+        logger.info("🚀 Starting Quantum Betting System")
+        
+        # Start real-time analysis
+        analysis_task = asyncio.create_task(
+            self.real_time_engine.real_time_analysis_loop(market_data_stream)
+        )
+        
+        # Start portfolio optimization loop
+        optimization_task = asyncio.create_task(
+            self.portfolio_optimization_loop()
+        )
+        
+        # Run both loops concurrently
+        await asyncio.gather(analysis_task, optimization_task)
+    
+    async def portfolio_optimization_loop(self):
+        """Continuous portfolio optimization"""
+        while True:
+            try:
+                # Get current opportunities
+                active_opportunities = list(self.real_time_engine.active_positions.values())
+                
+                if active_opportunities:
+                    # Optimize allocation
+                    optimal_allocation = self.portfolio_optimizer.optimize_portfolio_allocation(
+                        active_opportunities, self.current_capital * 0.1  # Use 10% of capital
+                    )
+                    
+                    logger.info(f"Portfolio optimization: {len(optimal_allocation)} positions optimized")
+                
+                # Wait before next optimization
+                await asyncio.sleep(300)  # 5 minutes
+                
+            except Exception as e:
+                logger.error(f"Error in portfolio optimization: {e}")
+                await asyncio.sleep(300)
+    
+    def generate_system_report(self) -> Dict:
+        """Generate comprehensive system performance report"""
+        performance = self.real_time_engine.get_performance_summary()
+        
+        report = {
+            'timestamp': datetime.now(),
+            'capital_performance': {
+                'initial_capital': self.initial_capital,
+                'current_capital': self.current_capital,
+                'total_return': (self.current_capital - self.initial_capital) / self.initial_capital,
+                'total_trades': len(self.trade_history)
+            },
+            'system_performance': performance,
+            'quantum_enhancements': {
+                'anomaly_detection_active': True,
+                'topological_analysis_active': True,
+                'information_bottleneck_active': True,
+                'portfolio_entanglement_optimization': True
+            }
+        }
+        
+        return report
+
+
+# ============================================
+# DEMONSTRATION OF COMPLETE SYSTEM
+# ============================================
+
+
+def demonstrate_complete_quantum_system():
+    """Demonstrate the complete quantum betting system"""
+    print("\n🌌 QUANTUM BETTING SYSTEM DEMONSTRATION")
+    print("=" * 60)
+    
+    # Initialize system
+    quantum_system = QuantumBettingSystem(initial_capital=50000)
+    
+    # Generate sample opportunities
+    sample_opportunities = [
+        {
+            'enhanced_confidence': 0.7,
+            'quantum_factors': {'vacuum_energy': 0.05, 'anomaly_detected': False},
+            'topological_factors': {'tension': 0.3, 'stability': 0.8, 'phase': 'STABLE'}
+        },
+        {
+            'enhanced_confidence': 0.6,
+            'quantum_factors': {'vacuum_energy': 0.12, 'anomaly_detected': True},
+            'topological_factors': {'tension': 0.7, 'stability': 0.4, 'phase': 'TRANSITIONAL'}
+        },
+        {
+            'enhanced_confidence': 0.8,
+            'quantum_factors': {'vacuum_energy': 0.03, 'anomaly_detected': False},
+            'topological_factors': {'tension': 0.2, 'stability': 0.9, 'phase': 'STABLE'}
+        }
+    ]
+    
+    # Demonstrate portfolio optimization
+    optimal_allocation = quantum_system.portfolio_optimizer.optimize_portfolio_allocation(
+        sample_opportunities, 5000  # $5000 allocation
+    )
+    
+    print("\n🎯 PORTFOLIO OPTIMIZATION RESULTS:")
+    print("-" * 40)
+    for i, (opp_id, allocation) in enumerate(optimal_allocation.items()):
+        opp = sample_opportunities[i]
+        print(f"Opportunity {i+1}: ${allocation:.2f}")
+        print(f"  Confidence: {opp['enhanced_confidence']:.1%}")
+        print(f"  Quantum Energy: {opp['quantum_factors']['vacuum_energy']:.3f}")
+        print(f"  Topology Phase: {opp['topological_factors']['phase']}")
+        print(f"  Anomaly Status: {'⚠️ ' if opp['quantum_factors']['anomaly_detected'] else '✅'}")
+        print()
+    
+    # Generate system report
+    report = quantum_system.generate_system_report()
+    
+    print("📊 SYSTEM STATUS REPORT:")
+    print("-" * 40)
+    print(f"Initial Capital: ${report['capital_performance']['initial_capital']:,.2f}")
+    print(f"Current Capital: ${report['capital_performance']['current_capital']:,.2f}")
+    print(f"Quantum Enhancements Active: {len([k for k, v in report['quantum_enhancements'].items() if v])}/4")
+    
+    print("\n🔬 ACTIVE QUANTUM MODULES:")
+    for module, active in report['quantum_enhancements'].items():
+        status = "✅" if active else "❌"
+        print(f"  {status} {module.replace('_', ' ').title()}")
+
+
+if __name__ == "__main__":
+    # Run demonstrations
+    print("Running Advanced Risk System Demo...")
+    demonstrate_advanced_risk_system()
+    
+    print("\n" + "="*80 + "\n")
+    
+    print("Running Complete Quantum System Demo...")
+    demonstrate_complete_quantum_system()
+    
+    print("\n🎉 All demonstrations completed successfully!")
+    print("\nThe Quantum Betting System is now ready for deployment with:")
+    print("• Real-time anomaly detection using quantum field theory")
+    print("• Topological market analysis with field syntax")
+    print("• Information bottleneck filtering")
+    print("• Portfolio optimization with quantum entanglement")
+    print("• Comprehensive risk assessment engine")

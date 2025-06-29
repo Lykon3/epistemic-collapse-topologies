@@ -1,0 +1,689 @@
+﻿# Lucian Betting Engine v3.0
+# Unified ML Architecture: Multi-Sport Intelligence with Real-Time Integration
+# Combines historical ML training with live API data for production betting systems
+
+
+import os
+import pandas as pd
+import numpy as np
+import xgboost as xgb
+import requests
+import json
+import logging
+from datetime import datetime, timedelta
+from sklearn.model_selection import TimeSeriesSplit, train_test_split
+from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
+from sklearn.preprocessing import StandardScaler
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Any, Tuple
+from abc import ABC, abstractmethod
+import warnings
+warnings.filterwarnings('ignore')
+
+
+# === Section 0: Enhanced Configuration & Logging ===
+@dataclass
+class Config:
+    """Unified configuration for ML and live betting operations."""
+    api_key: Optional[str]
+    sport_key: str = "americanfootball_nfl"
+    region: str = "us"
+    market: str = "spreads"
+    confidence_threshold: float = 0.15
+    max_daily_bets: int = 5
+    kelly_fraction: float = 0.25
+    model_retrain_days: int = 30
+    
+    def __post_init__(self):
+        self.api_key = self.api_key or os.getenv("API_KEY")
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+CONFIG = Config()
+
+
+# === Section 1: Enhanced Data Models ===
+@dataclass
+class BettingRecommendation:
+    """Enhanced recommendation with ML confidence and Kelly sizing."""
+    team: str
+    bet_type: str  # 'spread', 'moneyline', 'total'
+    line: float
+    odds: float
+    bookmaker: str
+    confidence: float
+    kelly_size: float
+    ml_probability: float
+    reasoning: str
+    game_id: str
+    expected_value: float
+
+
+@dataclass
+class GameFeatures:
+    """Structured features for ML prediction."""
+    game_id: str
+    home_team: str
+    away_team: str
+    spread_line: float
+    total_line: float
+    features: Dict[str, float]
+    historical_data: Optional[Dict] = None
+
+
+class SportDataset:
+    """Manages historical and live sports data."""
+    
+    def __init__(self, sport: str):
+        self.sport = sport
+        self.data = None
+        self.features = []
+        self.logger = logging.getLogger(f"Dataset.{sport}")
+    
+    def load_historical_data(self, data_source: str = "sample") -> pd.DataFrame:
+        """Load historical dataset - extensible for different sources."""
+        if data_source == "sample":
+            return self._generate_sample_data()
+        elif data_source == "kaggle":
+            return self._load_kaggle_data()
+        elif data_source == "csv":
+            return self._load_csv_data()
+    
+    def _generate_sample_data(self) -> pd.DataFrame:
+        """Generate realistic sample data for demonstration."""
+        np.random.seed(42)
+        n_games = 1000
+        
+        # Generate team performance metrics
+        teams = ['KC', 'BUF', 'LAR', 'GB', 'TB', 'DAL', 'SF', 'BAL', 'CIN', 'TEN', 
+                'IND', 'LAC', 'LV', 'NE', 'MIA', 'NYJ', 'CLE', 'PIT', 'DEN', 'HOU',
+                'PHI', 'WAS', 'NYG', 'CHI', 'MIN', 'DET', 'ATL', 'NO', 'CAR', 'TB',
+                'SEA', 'ARI']
+        
+        data = []
+        for i in range(n_games):
+            home_team = np.random.choice(teams)
+            away_team = np.random.choice([t for t in teams if t != home_team])
+            
+            # Realistic team strength (0-100)
+            home_strength = np.random.normal(50, 15)
+            away_strength = np.random.normal(50, 15)
+            
+            # Generate spread based on team strength difference
+            strength_diff = home_strength - away_strength + 3  # Home field advantage
+            spread_line = -round(strength_diff / 3, 1)
+            
+            # Generate features
+            features = {
+                'season': 2023,
+                'week': np.random.randint(1, 18),
+                'home_team': home_team,
+                'away_team': away_team,
+                'spread_line': spread_line,
+                'total_line': np.random.normal(47, 6),
+                'home_off_eff': np.random.normal(home_strength, 5),
+                'away_off_eff': np.random.normal(away_strength, 5),
+                'home_def_eff': np.random.normal(50, 10),
+                'away_def_eff': np.random.normal(50, 10),
+                'home_rest_days': np.random.choice([3, 6, 7, 10]),
+                'away_rest_days': np.random.choice([3, 6, 7, 10]),
+                'weather_temp': np.random.normal(65, 20),
+                'is_dome': np.random.choice([0, 1], p=[0.7, 0.3]),
+                'home_injuries': np.random.poisson(2),
+                'away_injuries': np.random.poisson(2),
+            }
+            
+            # Generate realistic outcomes
+            true_strength_diff = home_strength - away_strength + 3
+            actual_spread = np.random.normal(true_strength_diff, 14)
+            
+            features.update({
+                'actual_spread': actual_spread,
+                'home_covered': 1 if actual_spread > -spread_line else 0,
+                'total_points': np.random.normal(47, 12),
+                'total_over': 1 if features['total_points'] > features['total_line'] else 0
+            })
+            
+            data.append(features)
+        
+        df = pd.DataFrame(data)
+        self.logger.info(f"Generated {len(df)} sample games for {self.sport}")
+        return df
+    
+    def engineer_features(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Advanced feature engineering for ML models."""
+        self.logger.info("Engineering advanced features...")
+        
+        # Efficiency differentials
+        df['off_eff_diff'] = df['home_off_eff'] - df['away_off_eff']
+        df['def_eff_diff'] = df['home_def_eff'] - df['away_def_eff']
+        df['total_eff_diff'] = df['off_eff_diff'] - df['def_eff_diff']
+        
+        # Rest advantages
+        df['rest_advantage'] = df['home_rest_days'] - df['away_rest_days']
+        df['home_rested'] = (df['home_rest_days'] >= 7).astype(int)
+        df['away_rested'] = (df['away_rest_days'] >= 7).astype(int)
+        
+        # Situational factors
+        df['injury_diff'] = df['away_injuries'] - df['home_injuries']  # Positive favors home
+        df['weather_factor'] = np.where(df['is_dome'], 0, 
+                                      np.abs(df['weather_temp'] - 70) / 10)
+        
+        # Market factors
+        df['spread_magnitude'] = np.abs(df['spread_line'])
+        df['high_total'] = (df['total_line'] > 50).astype(int)
+        
+        # Feature list for ML models
+        self.features = [
+            'spread_line', 'total_line', 'off_eff_diff', 'def_eff_diff', 
+            'total_eff_diff', 'rest_advantage', 'home_rested', 'away_rested',
+            'injury_diff', 'weather_factor', 'spread_magnitude', 'high_total'
+        ]
+        
+        self.logger.info(f"Engineered {len(self.features)} features for prediction")
+        return df
+
+
+# === Section 2: ML Model Architecture ===
+class MLBettingModel(ABC):
+    """Abstract base for all ML betting models."""
+    
+    def __init__(self, name: str, sport: str):
+        self.name = name
+        self.sport = sport
+        self.model = None
+        self.scaler = StandardScaler()
+        self.features = []
+        self.performance_metrics = {}
+        self.logger = logging.getLogger(f"MLModel.{name}")
+    
+    @abstractmethod
+    def train(self, data: pd.DataFrame) -> None:
+        pass
+    
+    @abstractmethod
+    def predict(self, features: pd.DataFrame) -> np.ndarray:
+        pass
+    
+    def backtest(self, data: pd.DataFrame, split_date: str = None) -> Dict:
+        """Comprehensive backtesting with walk-forward validation."""
+        self.logger.info(f"Starting backtest for {self.name}")
+        
+        if split_date:
+            train_data = data[data['season'] < 2023]
+            test_data = data[data['season'] == 2023]
+        else:
+            train_data, test_data = train_test_split(data, test_size=0.2, shuffle=False)
+        
+        # Train model
+        self.train(train_data)
+        
+        # Generate predictions
+        X_test = test_data[self.features]
+        predictions = self.predict(X_test)
+        
+        # Calculate performance metrics
+        y_true = test_data[self.target_column]
+        accuracy = accuracy_score(y_true, predictions > 0.5)
+        auc = roc_auc_score(y_true, predictions)
+        
+        # Betting simulation
+        betting_results = self._simulate_betting(test_data, predictions)
+        
+        metrics = {
+            'accuracy': accuracy,
+            'auc': auc,
+            'total_bets': betting_results['total_bets'],
+            'wins': betting_results['wins'],
+            'win_rate': betting_results['win_rate'],
+            'profit_units': betting_results['profit_units'],
+            'roi': betting_results['roi']
+        }
+        
+        self.performance_metrics = metrics
+        self.logger.info(f"Backtest complete. Win rate: {metrics['win_rate']:.1%}, ROI: {metrics['roi']:.1%}")
+        return metrics
+    
+    def _simulate_betting(self, data: pd.DataFrame, predictions: np.ndarray) -> Dict:
+        """Simulate betting strategy with confidence thresholds."""
+        total_bets = 0
+        wins = 0
+        total_wagered = 0
+        total_profit = 0
+        
+        for i, (_, game) in enumerate(data.iterrows()):
+            confidence = abs(predictions[i] - 0.5) * 2
+            
+            if confidence > CONFIG.confidence_threshold:
+                total_bets += 1
+                bet_size = self._kelly_criterion(predictions[i], 1.91)  # Standard -110 odds
+                total_wagered += bet_size
+                
+                # Determine if bet won
+                if self.target_column == 'home_covered':
+                    bet_won = (predictions[i] > 0.5 and game['home_covered']) or \
+                             (predictions[i] < 0.5 and not game['home_covered'])
+                else:
+                    bet_won = (predictions[i] > 0.5 and game['total_over']) or \
+                             (predictions[i] < 0.5 and not game['total_over'])
+                
+                if bet_won:
+                    wins += 1
+                    total_profit += bet_size * 0.91  # Win at -110 odds
+                else:
+                    total_profit -= bet_size
+        
+        win_rate = wins / total_bets if total_bets > 0 else 0
+        roi = total_profit / total_wagered if total_wagered > 0 else 0
+        
+        return {
+            'total_bets': total_bets,
+            'wins': wins,
+            'win_rate': win_rate,
+            'profit_units': total_profit,
+            'roi': roi
+        }
+    
+    def _kelly_criterion(self, probability: float, odds: float) -> float:
+        """Calculate optimal bet size using Kelly Criterion."""
+        p = probability
+        q = 1 - p
+        b = odds - 1  # Net odds
+        
+        if p * odds > 1:  # Only bet if positive expected value
+            kelly_fraction = (b * p - q) / b
+            return max(0, min(kelly_fraction * CONFIG.kelly_fraction, 0.1))  # Cap at 10%
+        return 0
+
+
+class XGBoostSpreadModel(MLBettingModel):
+    """XGBoost model for spread betting predictions."""
+    
+    def __init__(self, sport: str = "nfl"):
+        super().__init__("XGBoost_Spread", sport)
+        self.target_column = 'home_covered'
+    
+    def train(self, data: pd.DataFrame) -> None:
+        """Train XGBoost model with hyperparameter optimization."""
+        self.logger.info("Training XGBoost spread model...")
+        
+        # Prepare features
+        dataset = SportDataset(self.sport)
+        featured_data = dataset.engineer_features(data)
+        self.features = dataset.features
+        
+        X = featured_data[self.features]
+        y = featured_data[self.target_column]
+        
+        # Scale features
+        X_scaled = self.scaler.fit_transform(X)
+        
+        # Train with early stopping
+        X_train, X_val, y_train, y_val = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        
+        self.model = xgb.XGBClassifier(
+            objective='binary:logistic',
+            eval_metric='logloss',
+            n_estimators=200,
+            learning_rate=0.1,
+            max_depth=4,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42,
+            early_stopping_rounds=20
+        )
+        
+        self.model.fit(
+            X_train, y_train,
+            eval_set=[(X_val, y_val)],
+            verbose=False
+        )
+        
+        self.logger.info("XGBoost training complete")
+    
+    def predict(self, features: pd.DataFrame) -> np.ndarray:
+        """Generate probability predictions."""
+        if self.model is None:
+            raise ValueError("Model must be trained before prediction")
+        
+        X_scaled = self.scaler.transform(features)
+        return self.model.predict_proba(X_scaled)[:, 1]
+    
+    def get_feature_importance(self) -> Dict[str, float]:
+        """Return feature importance scores."""
+        if self.model is None:
+            return {}
+        
+        importance = self.model.feature_importances_
+        return dict(zip(self.features, importance))
+
+
+class XGBoostTotalModel(MLBettingModel):
+    """XGBoost model for total (over/under) predictions."""
+    
+    def __init__(self, sport: str = "nfl"):
+        super().__init__("XGBoost_Total", sport)
+        self.target_column = 'total_over'
+    
+    def train(self, data: pd.DataFrame) -> None:
+        """Train XGBoost model for total predictions."""
+        self.logger.info("Training XGBoost total model...")
+        
+        dataset = SportDataset(self.sport)
+        featured_data = dataset.engineer_features(data)
+        self.features = dataset.features
+        
+        X = featured_data[self.features]
+        y = featured_data[self.target_column]
+        
+        X_scaled = self.scaler.fit_transform(X)
+        X_train, X_val, y_train, y_val = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        
+        self.model = xgb.XGBClassifier(
+            objective='binary:logistic',
+            eval_metric='logloss',
+            n_estimators=150,
+            learning_rate=0.1,
+            max_depth=3,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            random_state=42
+        )
+        
+        self.model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
+        self.logger.info("XGBoost total model training complete")
+    
+    def predict(self, features: pd.DataFrame) -> np.ndarray:
+        """Generate probability predictions for totals."""
+        if self.model is None:
+            raise ValueError("Model must be trained before prediction")
+        
+        X_scaled = self.scaler.transform(features)
+        return self.model.predict_proba(X_scaled)[:, 1]
+
+
+# === Section 3: Live API Integration ===
+class LiveAPIManager:
+    """Enhanced API manager with ML feature engineering."""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.base_url = "https://api.the-odds-api.com/v4"
+        self.session = requests.Session()
+        self.logger = logging.getLogger("LiveAPI")
+    
+    def get_live_games_with_features(self) -> List[GameFeatures]:
+        """Fetch live games and engineer features for ML prediction."""
+        raw_odds = self._get_live_odds()
+        if not raw_odds:
+            return []
+        
+        game_features = []
+        for game in raw_odds:
+            features = self._engineer_live_features(game)
+            if features:
+                game_features.append(features)
+        
+        return game_features
+    
+    def _get_live_odds(self) -> Optional[List[Dict]]:
+        """Fetch live odds from API."""
+        if not self.config.api_key:
+            self.logger.warning("No API key - using demo data")
+            return self._get_demo_odds()
+        
+        url = f"{self.base_url}/sports/{self.config.sport_key}/odds/"
+        params = {
+            'apiKey': self.config.api_key,
+            'regions': self.config.region,
+            'markets': 'spreads,totals'
+        }
+        
+        try:
+            response = self.session.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            self.logger.error(f"API request failed: {e}")
+            return None
+    
+    def _engineer_live_features(self, game: Dict) -> Optional[GameFeatures]:
+        """Engineer features from live game data."""
+        try:
+            # Extract basic game info
+            home_team = game['home_team']
+            away_team = game['away_team']
+            
+            # Find spread and total from bookmakers
+            spread_line = None
+            total_line = None
+            
+            for bookmaker in game.get('bookmakers', []):
+                for market in bookmaker.get('markets', []):
+                    if market['key'] == 'spreads':
+                        for outcome in market['outcomes']:
+                            if outcome['name'] == home_team:
+                                spread_line = outcome['point']
+                    elif market['key'] == 'totals':
+                        total_line = market['outcomes'][0]['point']
+            
+            if spread_line is None or total_line is None:
+                return None
+            
+            # Generate estimated features (in production, these would come from data sources)
+            features = {
+                'spread_line': spread_line,
+                'total_line': total_line,
+                'off_eff_diff': np.random.normal(0, 5),  # Replace with real team stats
+                'def_eff_diff': np.random.normal(0, 5),
+                'total_eff_diff': np.random.normal(0, 8),
+                'rest_advantage': 0,  # Replace with actual rest days
+                'home_rested': 1,
+                'away_rested': 1,
+                'injury_diff': 0,  # Replace with injury reports
+                'weather_factor': 0,  # Replace with weather data
+                'spread_magnitude': abs(spread_line),
+                'high_total': 1 if total_line > 50 else 0
+            }
+            
+            return GameFeatures(
+                game_id=game['id'],
+                home_team=home_team,
+                away_team=away_team,
+                spread_line=spread_line,
+                total_line=total_line,
+                features=features
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error engineering features for game: {e}")
+            return None
+    
+    def _get_demo_odds(self) -> List[Dict]:
+        """Demo data for testing."""
+        return [{
+            'id': 'demo_game_1',
+            'home_team': 'Kansas City Chiefs',
+            'away_team': 'Buffalo Bills',
+            'bookmakers': [{
+                'title': 'DraftKings',
+                'markets': [
+                    {
+                        'key': 'spreads',
+                        'outcomes': [
+                            {'name': 'Kansas City Chiefs', 'point': -3.5, 'price': -110},
+                            {'name': 'Buffalo Bills', 'point': 3.5, 'price': -110}
+                        ]
+                    },
+                    {
+                        'key': 'totals',
+                        'outcomes': [
+                            {'name': 'Over', 'point': 52.5, 'price': -110},
+                            {'name': 'Under', 'point': 52.5, 'price': -110}
+                        ]
+                    }
+                ]
+            }]
+        }]
+
+
+# === Section 4: Production Betting Engine ===
+class LucianBettingEngine:
+    """Main production engine combining ML models with live API data."""
+    
+    def __init__(self, config: Config = CONFIG):
+        self.config = config
+        self.api_manager = LiveAPIManager(config)
+        self.models = {}
+        self.logger = logging.getLogger("LucianEngine")
+        
+        # Initialize ML models
+        self.models['spread'] = XGBoostSpreadModel()
+        self.models['total'] = XGBoostTotalModel()
+    
+    def train_models(self, historical_data: pd.DataFrame = None) -> None:
+        """Train all ML models on historical data."""
+        self.logger.info("Training ML models...")
+        
+        if historical_data is None:
+            dataset = SportDataset("nfl")
+            historical_data = dataset.load_historical_data()
+        
+        # Train each model
+        for model_name, model in self.models.items():
+            self.logger.info(f"Training {model_name} model...")
+            model.train(historical_data)
+            
+            # Run backtest
+            metrics = model.backtest(historical_data)
+            self.logger.info(f"{model_name} model metrics: {metrics}")
+    
+    def generate_recommendations(self) -> List[BettingRecommendation]:
+        """Generate betting recommendations from live games."""
+        self.logger.info("Generating betting recommendations...")
+        
+        # Get live games with features
+        live_games = self.api_manager.get_live_games_with_features()
+        if not live_games:
+            self.logger.warning("No live games available")
+            return []
+        
+        recommendations = []
+        
+        for game in live_games:
+            # Create feature DataFrame
+            feature_df = pd.DataFrame([game.features])
+            
+            # Get predictions from both models
+            spread_prob = self.models['spread'].predict(feature_df[self.models['spread'].features])[0]
+            total_prob = self.models['total'].predict(feature_df[self.models['total'].features])[0]
+            
+            # Generate recommendations if confidence is high enough
+            recommendations.extend(self._create_recommendations(game, spread_prob, total_prob))
+        
+        # Sort by expected value and limit to max daily bets
+        recommendations.sort(key=lambda x: x.expected_value, reverse=True)
+        return recommendations[:self.config.max_daily_bets]
+    
+    def _create_recommendations(self, game: GameFeatures, spread_prob: float, total_prob: float) -> List[BettingRecommendation]:
+        """Create betting recommendations from model predictions."""
+        recommendations = []
+        
+        # Spread recommendation
+        spread_confidence = abs(spread_prob - 0.5) * 2
+        if spread_confidence > self.config.confidence_threshold:
+            team = game.home_team if spread_prob > 0.5 else game.away_team
+            line = game.spread_line if spread_prob > 0.5 else -game.spread_line
+            
+            recommendations.append(BettingRecommendation(
+                team=team,
+                bet_type='spread',
+                line=line,
+                odds=-110,
+                bookmaker='Composite',
+                confidence=spread_confidence,
+                kelly_size=self.models['spread']._kelly_criterion(spread_prob, 1.91),
+                ml_probability=spread_prob,
+                reasoning=f"ML model predicts {spread_prob:.1%} probability to cover {line}",
+                game_id=game.game_id,
+                expected_value=(spread_prob * 0.91 - (1 - spread_prob)) * 100
+            ))
+        
+        # Total recommendation
+        total_confidence = abs(total_prob - 0.5) * 2
+        if total_confidence > self.config.confidence_threshold:
+            bet_side = 'Over' if total_prob > 0.5 else 'Under'
+            
+            recommendations.append(BettingRecommendation(
+                team=f"{bet_side} {game.total_line}",
+                bet_type='total',
+                line=game.total_line,
+                odds=-110,
+                bookmaker='Composite',
+                confidence=total_confidence,
+                kelly_size=self.models['total']._kelly_criterion(total_prob, 1.91),
+                ml_probability=total_prob,
+                reasoning=f"ML model predicts {total_prob:.1%} probability for {bet_side}",
+                game_id=game.game_id,
+                expected_value=(total_prob * 0.91 - (1 - total_prob)) * 100
+            ))
+        
+        return recommendations
+    
+    def run_production_analysis(self) -> None:
+        """Run complete production analysis pipeline."""
+        self.logger.info("=== Lucian Betting Engine v3.0 - Production Analysis ===")
+        
+        # Train models if not already trained
+        if not all(model.model for model in self.models.values()):
+            self.train_models()
+        
+        # Generate recommendations
+        recommendations = self.generate_recommendations()
+        
+        # Display results
+        if recommendations:
+            print(f"\n🎯 Found {len(recommendations)} HIGH-CONFIDENCE OPPORTUNITIES")
+            print("=" * 80)
+            
+            total_expected_value = 0
+            for i, rec in enumerate(recommendations, 1):
+                print(f"\n{i}. {rec.team} ({rec.bet_type.upper()})")
+                print(f"   Line: {rec.line:+.1f} | Odds: {rec.odds}")
+                print(f"   Confidence: {rec.confidence:.1%} | Kelly Size: {rec.kelly_size:.1%}")
+                print(f"   Expected Value: +{rec.expected_value:.1f} basis points")
+                print(f"   Reasoning: {rec.reasoning}")
+                total_expected_value += rec.expected_value
+            
+            print(f"\n💰 Total Portfolio Expected Value: +{total_expected_value:.1f} basis points")
+            print("=" * 80)
+        else:
+            print("\n📊 No opportunities meet current confidence thresholds")
+            print("    Market appears efficiently priced - standing by...")
+
+
+# === Section 5: Main Execution ===
+if __name__ == "__main__":
+    # Initialize engine
+    engine = LucianBettingEngine()
+    
+    # Run production analysis
+    engine.run_production_analysis()
+    
+    # Optional: Display model performance metrics
+    print("\n📈 MODEL PERFORMANCE SUMMARY")
+    print("=" * 50)
+    for model_name, model in engine.models.items():
+        if model.performance_metrics:
+            metrics = model.performance_metrics
+            print(f"\n{model_name.upper()} Model:")
+            print(f"  Accuracy: {metrics['accuracy']:.1%}")
+            print(f"  Win Rate: {metrics['win_rate']:.1%}")
+            print(f"  ROI: {metrics['roi']:.1%}")
+            print(f"  Total Bets: {metrics['total_bets']}")

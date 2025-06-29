@@ -1,0 +1,159 @@
+﻿This code sets up a basic multi-tenant API with different access tiers.
+1. Project Structure
+For a clean setup, your project could be organized as follows:
+lucian_saas/
+├── Dockerfile
+├── main.py
+├── models.py
+└── requirements.txt
+
+2. File Contents
+Here is the code for each file.
+requirements.txt
+This file lists the necessary Python packages.
+# requirements.txt
+fastapi
+uvicorn[standard]
+
+models.py
+This file defines the data structures for your application, such as users and subscription tiers, which are central to the multi-tenant architecture.
+# models.py
+from pydantic import BaseModel, Field
+from enum import Enum
+from typing import Optional, List
+import uuid
+
+# Define the paid tiers from the blueprint
+class SubscriptionTier(str, Enum):
+   free = "Free"
+   pro = "Pro"
+   syndicate = "Syndicate"
+
+class User(BaseModel):
+   id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+   username: str
+   tier: SubscriptionTier = SubscriptionTier.free
+   syndicate_id: Optional[str] = None
+
+class Signal(BaseModel):
+   sport: str
+   event: str
+   market: str
+   prediction: str
+   confidence: float
+   status: str # e.g., "PENDING", "ACTIVE", "SETTLED"
+
+class Wallet(BaseModel):
+   user_id: str
+   provider: str # e.g., "MetaMask", "Phantom"
+   address: str
+   is_connected: bool = True
+
+
+main.py
+This is the main application file. It uses FastAPI to create the REST endpoints and includes placeholder logic for the different tiers.
+# main.py
+from fastapi import FastAPI, HTTPException, Depends
+from typing import List, Dict
+from models import User, SubscriptionTier, Signal, Wallet
+
+# Initialize FastAPI App
+app = FastAPI(
+   title="Lucian v6.0+ SaaS Intelligence Layer",
+   description="API for providing quantum-enhanced market signals across multiple tiers.",
+   version="1.0.0"
+)
+
+# --- In-memory database for demonstration purposes ---
+# In a real application, this would be replaced with PostgreSQL
+db: Dict[str, User] = {}
+
+# --- Dependency to get the current user ---
+async def get_user(user_id: str) -> User:
+   user = db.get(user_id)
+   if not user:
+       raise HTTPException(status_code=404, detail="User not found")
+   return user
+
+@app.get("/", tags=["Status"])
+async def root():
+   return {"message": "Welcome to the Lucian SaaS API. System is operational."}
+
+@app.post("/users/", response_model=User, tags=["Users"])
+async def create_user(username: str):
+   """Creates a new user with a default 'Free' tier subscription."""
+   new_user = User(username=username)
+   db[new_user.id] = new_user
+   return new_user
+
+@app.get("/signals/{user_id}", response_model=List[Signal], tags=["Signals"])
+async def get_signals_for_user(user: User = Depends(get_user)):
+   """
+   Provides signals based on the user's subscription tier.
+   - Free: Delayed signals
+   - Pro: Real-time signals
+   - Syndicate: Custom model signals
+   """
+   # Placeholder logic for demonstration
+   if user.tier == SubscriptionTier.free:
+       # Simulate delayed signals
+       return [Signal(sport="NBA", event="Lakers vs Celtics", market="Moneyline", prediction="Lakers", confidence=0.62, status="DELAYED")]
+   
+   if user.tier == SubscriptionTier.pro:
+       # Simulate real-time signals with alerts
+       return [Signal(sport="NBA", event="Lakers vs Celtics", market="Moneyline", prediction="Lakers", confidence=0.62, status="REAL-TIME")]
+
+   if user.tier == SubscriptionTier.syndicate:
+       # Simulate access to custom model plugins
+       return [Signal(sport="UFC", event="Fighter A vs Fighter B", market="Method of Victory", prediction="Fighter A by KO/TKO", confidence=0.78, status="SYNDICATE-CUSTOM")]
+   
+   raise HTTPException(status_code=403, detail="Invalid subscription tier.")
+
+@app.post("/wallet/connect", response_model=Wallet, tags=["Wallet Integration"])
+async def connect_wallet(user_id: str, provider: str, address: str):
+   """
+   Placeholder for wallet integration to enable auto-staked execution.
+  
+   """
+   user = await get_user(user_id) # Ensure user exists
+   # In a real application, you would perform verification here
+   print(f"Connecting wallet for user {user.username} with address {address}")
+   return Wallet(user_id=user.id, provider=provider, address=address)
+
+
+Dockerfile
+This file allows you to containerize the application for modular deployment, as specified in the tech stack.
+# Dockerfile
+# Use an official Python runtime as a parent image
+FROM python:3.10-slim
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy the requirements file into the container at /app
+COPY requirements.txt .
+
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the application's code into the container at /app
+COPY . .
+
+# Expose port 8000 to the outside world
+EXPOSE 8000
+
+# Command to run the application using uvicorn
+# This will start the FastAPI server
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+3. How to Run This Code
+1. Save the files in a directory named lucian_saas/ as shown in the structure above.
+2. Install Docker on your machine if you haven't already.
+3. Open your terminal, navigate into the lucian_saas/ directory.
+4. Build the Docker image by running the following command:
+docker build -t lucian-saas .
+
+5. Run the Docker container:
+docker run -d -p 8000:8000 --name lucian-api lucian-saas
+
+6. Access the API: Your SaaS backend is now running. You can access the interactive documentation by opening your web browser to http://localhost:8000/docs. From there, you can test the endpoints directly.

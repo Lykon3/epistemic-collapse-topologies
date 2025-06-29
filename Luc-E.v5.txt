@@ -1,0 +1,663 @@
+﻿# Lucian Betting Engine v5.0
+# Advanced ML Integration with Real-Time Anomaly Detection
+# Incorporates insights from RiskCircuit, Categorical Dynamics, and Field Syntax frameworks
+
+
+import pandas as pd
+import numpy as np
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import DBSCAN
+import logging
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+import warnings
+import torch
+import torch.nn as nn
+from collections import deque
+import asyncio
+
+
+warnings.filterwarnings('ignore')
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# ============================================
+# ENHANCED CONFIGURATION WITH DYNAMIC PARAMETERS
+# ============================================
+
+
+@dataclass
+class DynamicConfig:
+    """Dynamic configuration that adapts based on market conditions"""
+    # Base parameters
+    base_confidence_threshold: float = 0.15
+    max_daily_bets: int = 5
+    kelly_fraction: float = 0.25
+    
+    # Dynamic adaptation parameters
+    adaptation_window: int = 100
+    std_threshold_multiplier: float = 2.5
+    min_samples_for_adaptation: int = 20
+    
+    # Multi-scale analysis windows (in minutes)
+    time_windows: List[int] = None
+    
+    # Early warning thresholds
+    warning_thresholds: Dict[str, float] = None
+    
+    def __post_init__(self):
+        if self.time_windows is None:
+            self.time_windows = [5, 15, 60, 240, 1440]  # 5min to 1day
+        
+        if self.warning_thresholds is None:
+            self.warning_thresholds = {
+                'autocorrelation': 0.7,
+                'variance': 0.6,
+                'momentum_shift': 0.65,
+                'volume_anomaly': 0.55,
+                'composite': 0.7
+            }
+
+
+# ============================================
+# DYNAMIC THRESHOLD CALCULATOR (From RiskCircuit)
+# ============================================
+
+
+class DynamicThresholdManager:
+    """Manages dynamic confidence thresholds based on recent performance"""
+    
+    def __init__(self, config: DynamicConfig):
+        self.config = config
+        self.performance_buffer = deque(maxlen=config.adaptation_window)
+        self.error_buffer = deque(maxlen=config.adaptation_window)
+        
+    def record_prediction_result(self, prediction_confidence: float, actual_outcome: bool):
+        """Record a prediction result for threshold adaptation"""
+        prediction_error = abs(prediction_confidence - (1.0 if actual_outcome else 0.0))
+        
+        self.performance_buffer.append({
+            'confidence': prediction_confidence,
+            'outcome': actual_outcome,
+            'error': prediction_error,
+            'timestamp': datetime.now()
+        })
+        
+        self.error_buffer.append(prediction_error)
+    
+    def calculate_dynamic_threshold(self) -> float:
+        """Calculate adaptive confidence threshold"""
+        if len(self.error_buffer) < self.config.min_samples_for_adaptation:
+            return self.config.base_confidence_threshold
+        
+        # Calculate statistics of recent errors
+        errors = list(self.error_buffer)
+        mean_error = np.mean(errors)
+        std_error = np.std(errors)
+        
+        # Adaptive threshold: higher when errors are high, lower when performance is good
+        dynamic_threshold = self.config.base_confidence_threshold + (
+            self.config.std_threshold_multiplier * std_error
+        )
+        
+        # Clamp to reasonable bounds
+        return max(0.05, min(0.4, dynamic_threshold))
+    
+    def get_performance_metrics(self) -> Dict[str, float]:
+        """Get current performance statistics"""
+        if len(self.performance_buffer) < 10:
+            return {'accuracy': 0.5, 'precision': 0.5, 'recent_performance': 0.5}
+        
+        recent_predictions = list(self.performance_buffer)[-20:]  # Last 20 predictions
+        
+        accuracy = np.mean([p['outcome'] for p in recent_predictions])
+        
+        # Calculate precision for high-confidence predictions
+        high_conf_predictions = [p for p in recent_predictions if p['confidence'] > 0.6]
+        precision = np.mean([p['outcome'] for p in high_conf_predictions]) if high_conf_predictions else 0.5
+        
+        # Recent performance trend
+        recent_errors = [p['error'] for p in recent_predictions]
+        recent_performance = 1.0 - np.mean(recent_errors)
+        
+        return {
+            'accuracy': accuracy,
+            'precision': precision,
+            'recent_performance': recent_performance,
+            'sample_size': len(recent_predictions)
+        }
+
+
+# ============================================
+# MULTI-SCALE FEATURE EXTRACTOR (From Categorical Dynamics)
+# ============================================
+
+
+class MultiScaleFeatureExtractor:
+    """Extract features across multiple time scales using tensor network principles"""
+    
+    def __init__(self, config: DynamicConfig):
+        self.config = config
+        self.feature_cache = {}
+        
+    def extract_hierarchical_features(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Extract features at multiple time scales"""
+        features = {}
+        
+        # Ensure we have price and volume data
+        if 'price' not in data.columns or 'volume' not in data.columns:
+            logger.warning("Missing price or volume data for feature extraction")
+            return {}
+        
+        for window in self.config.time_windows:
+            if len(data) < window:
+                continue
+                
+            # Get data for this window
+            window_data = data.tail(window)
+            
+            # Price-based features
+            returns = window_data['price'].pct_change().dropna()
+            features[f'volatility_{window}'] = returns.std()
+            features[f'momentum_{window}'] = returns.mean()
+            features[f'skewness_{window}'] = returns.skew()
+            features[f'kurtosis_{window}'] = returns.kurtosis()
+            
+            # Volume-based features
+            volume_changes = window_data['volume'].pct_change().dropna()
+            features[f'volume_volatility_{window}'] = volume_changes.std()
+            features[f'volume_trend_{window}'] = volume_changes.mean()
+            
+            # Cross-correlation features
+            if len(returns) > 1 and len(volume_changes) > 1:
+                min_len = min(len(returns), len(volume_changes))
+                price_vol_corr = np.corrcoef(
+                    returns.iloc[-min_len:].values,
+                    volume_changes.iloc[-min_len:].values
+                )[0, 1]
+                features[f'price_volume_corr_{window}'] = price_vol_corr if not np.isnan(price_vol_corr) else 0
+            
+            # Regime detection features
+            features[f'regime_stability_{window}'] = self._calculate_regime_stability(window_data)
+        
+        # Cross-scale features (relationships between different time scales)
+        features.update(self._calculate_cross_scale_features(features))
+        
+        return features
+    
+    def _calculate_regime_stability(self, data: pd.DataFrame) -> float:
+        """Calculate how stable the current regime is"""
+        if len(data) < 10:
+            return 0.5
+        
+        returns = data['price'].pct_change().dropna()
+        
+        # Use DBSCAN to identify regimes
+        if len(returns) > 5:
+            features_for_clustering = np.column_stack([
+                returns.rolling(3).mean().fillna(0),
+                returns.rolling(3).std().fillna(0)
+            ])
+            
+            clustering = DBSCAN(eps=0.1, min_samples=3).fit(features_for_clustering)
+            
+            # Stability = proportion of points in the largest cluster
+            unique_labels, counts = np.unique(clustering.labels_[clustering.labels_ >= 0], return_counts=True)
+            if len(counts) > 0:
+                stability = np.max(counts) / len(returns)
+            else:
+                stability = 0.0
+        else:
+            stability = 0.5
+            
+        return stability
+    
+    def _calculate_cross_scale_features(self, features: Dict[str, float]) -> Dict[str, float]:
+        """Calculate features that capture relationships across time scales"""
+        cross_features = {}
+        
+        # Volatility ratios across scales
+        volatilities = {k: v for k, v in features.items() if 'volatility_' in k and 'volume' not in k}
+        if len(volatilities) >= 2:
+            vol_keys = sorted(volatilities.keys(), key=lambda x: int(x.split('_')[1]))
+            for i in range(len(vol_keys) - 1):
+                short_vol = volatilities[vol_keys[i]]
+                long_vol = volatilities[vol_keys[i + 1]]
+                ratio_key = f"vol_ratio_{vol_keys[i].split('_')[1]}_{vol_keys[i+1].split('_')[1]}"
+                cross_features[ratio_key] = short_vol / (long_vol + 1e-8)
+        
+        # Momentum divergence across scales
+        momentums = {k: v for k, v in features.items() if 'momentum_' in k}
+        if len(momentums) >= 2:
+            mom_values = list(momentums.values())
+            cross_features['momentum_divergence'] = np.std(mom_values)
+        
+        return cross_features
+
+
+# ============================================
+# EARLY WARNING SYSTEM (From Field Syntax)
+# ============================================
+
+
+class EarlyWarningSystem:
+    """Detect early warning signals of market regime changes"""
+    
+    def __init__(self, config: DynamicConfig):
+        self.config = config
+        self.signal_history = {signal: deque(maxlen=100) for signal in config.warning_thresholds.keys()}
+        
+    def calculate_warning_signals(self, data: pd.DataFrame) -> Dict[str, float]:
+        """Calculate all early warning signals"""
+        if len(data) < 20:
+            return {signal: 0.0 for signal in self.config.warning_thresholds.keys()}
+        
+        signals = {}
+        
+        # Autocorrelation (critical slowing down)
+        signals['autocorrelation'] = self._calculate_autocorrelation(data)
+        
+        # Variance (increased fluctuations)
+        signals['variance'] = self._calculate_normalized_variance(data)
+        
+        # Momentum shift (change in trend strength)
+        signals['momentum_shift'] = self._calculate_momentum_shift(data)
+        
+        # Volume anomaly (unusual trading activity)
+        signals['volume_anomaly'] = self._calculate_volume_anomaly(data)
+        
+        # Composite signal
+        signals['composite'] = self._calculate_composite_signal(signals)
+        
+        # Update signal history
+        for signal_name, value in signals.items():
+            if signal_name in self.signal_history:
+                self.signal_history[signal_name].append(value)
+        
+        return signals
+    
+    def _calculate_autocorrelation(self, data: pd.DataFrame, lag: int = 1) -> float:
+        """Calculate lag-1 autocorrelation of returns"""
+        returns = data['price'].pct_change().dropna()
+        if len(returns) < lag + 5:
+            return 0.0
+        
+        return np.corrcoef(returns.iloc[:-lag], returns.iloc[lag:])[0, 1] if not np.isnan(np.corrcoef(returns.iloc[:-lag], returns.iloc[lag:])[0, 1]) else 0.0
+    
+    def _calculate_normalized_variance(self, data: pd.DataFrame, window: int = 20) -> float:
+        """Calculate normalized variance of returns"""
+        returns = data['price'].pct_change().dropna()
+        if len(returns) < window:
+            return 0.0
+        
+        rolling_var = returns.rolling(window).var()
+        recent_var = rolling_var.iloc[-5:].mean()
+        historical_var = rolling_var.iloc[:-5].mean()
+        
+        return (recent_var / (historical_var + 1e-8)) if historical_var > 1e-8 else 0.0
+    
+    def _calculate_momentum_shift(self, data: pd.DataFrame, short_window: int = 5, long_window: int = 20) -> float:
+        """Calculate rate of change in momentum"""
+        if len(data) < long_window + 5:
+            return 0.0
+        
+        short_momentum = data['price'].rolling(short_window).mean().pct_change()
+        long_momentum = data['price'].rolling(long_window).mean().pct_change()
+        
+        momentum_diff = (short_momentum - long_momentum).abs()
+        return momentum_diff.iloc[-5:].mean() if not np.isnan(momentum_diff.iloc[-5:].mean()) else 0.0
+    
+    def _calculate_volume_anomaly(self, data: pd.DataFrame, window: int = 20) -> float:
+        """Detect volume anomalies"""
+        if len(data) < window or 'volume' not in data.columns:
+            return 0.0
+        
+        volume = data['volume']
+        rolling_mean = volume.rolling(window).mean()
+        rolling_std = volume.rolling(window).std()
+        
+        # Z-score of recent volume vs historical
+        recent_volume = volume.iloc[-5:].mean()
+        historical_mean = rolling_mean.iloc[-window:-5].mean()
+        historical_std = rolling_std.iloc[-window:-5].mean()
+        
+        if historical_std > 0:
+            z_score = abs(recent_volume - historical_mean) / historical_std
+            return min(z_score / 3.0, 1.0)  # Normalize to [0, 1]
+        
+        return 0.0
+    
+    def _calculate_composite_signal(self, signals: Dict[str, float]) -> float:
+        """Calculate weighted composite of all warning signals"""
+        weights = {
+            'autocorrelation': 0.3,
+            'variance': 0.25,
+            'momentum_shift': 0.25,
+            'volume_anomaly': 0.2
+        }
+        
+        composite = 0.0
+        for signal_name, weight in weights.items():
+            if signal_name in signals:
+                composite += signals[signal_name] * weight
+        
+        return composite
+    
+    def get_warning_status(self, signals: Dict[str, float]) -> Dict[str, bool]:
+        """Check which warning signals are above threshold"""
+        return {
+            signal: value > threshold 
+            for signal, value in signals.items()
+            if signal in self.config.warning_thresholds
+            for threshold in [self.config.warning_thresholds[signal]]
+        }
+
+
+# ============================================
+# ENHANCED ML MODEL WITH TENSOR NETWORK FEATURES
+# ============================================
+
+
+class EnhancedMLBettingModel:
+    """Advanced ML model incorporating multi-scale features and dynamic thresholds"""
+    
+    def __init__(self, config: DynamicConfig):
+        self.config = config
+        self.model = None
+        self.scaler = StandardScaler()
+        self.feature_extractor = MultiScaleFeatureExtractor(config)
+        self.threshold_manager = DynamicThresholdManager(config)
+        self.warning_system = EarlyWarningSystem(config)
+        self.feature_columns = []
+        
+    def prepare_features(self, data_list: List[pd.DataFrame]) -> Tuple[np.ndarray, List[str]]:
+        """Prepare feature matrix from list of data windows"""
+        all_features = []
+        
+        for data in data_list:
+            # Extract hierarchical features
+            hierarchical_features = self.feature_extractor.extract_hierarchical_features(data)
+            
+            # Extract warning signals
+            warning_signals = self.warning_system.calculate_warning_signals(data)
+            
+            # Combine all features
+            combined_features = {**hierarchical_features, **warning_signals}
+            all_features.append(combined_features)
+        
+        # Convert to DataFrame and handle missing values
+        features_df = pd.DataFrame(all_features).fillna(0)
+        
+        # Store feature column names
+        self.feature_columns = list(features_df.columns)
+        
+        return features_df.values, self.feature_columns
+    
+    def train(self, training_data: List[Dict]):
+        """Train the enhanced model"""
+        logger.info("Training enhanced ML model with multi-scale features...")
+        
+        # Prepare training data
+        X_list = []
+        y_list = []
+        
+        for game_data in training_data:
+            data_window = game_data['historical_data']  # Assumed to be DataFrame
+            outcome = game_data['actual_outcome']  # True/False for win/loss
+            
+            X_list.append(data_window)
+            y_list.append(outcome)
+        
+        # Extract features
+        X, feature_names = self.prepare_features(X_list)
+        y = np.array(y_list)
+        
+        # Scale features
+        X_scaled = self.scaler.fit_transform(X)
+        
+        # Train XGBoost with enhanced parameters
+        self.model = xgb.XGBClassifier(
+            objective='binary:logistic',
+            eval_metric='logloss',
+            n_estimators=300,
+            learning_rate=0.05,
+            max_depth=6,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            reg_alpha=0.1,
+            reg_lambda=0.1,
+            random_state=42
+        )
+        
+        # Train with early stopping
+        X_train, X_val, y_train, y_val = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+        
+        self.model.fit(
+            X_train, y_train,
+            eval_set=[(X_val, y_val)],
+            early_stopping_rounds=50,
+            verbose=False
+        )
+        
+        logger.info(f"Model trained with {len(feature_names)} features")
+        
+    def predict_with_confidence(self, current_data: pd.DataFrame) -> Dict[str, float]:
+        """Make prediction with dynamic confidence assessment"""
+        if self.model is None:
+            raise ValueError("Model must be trained before prediction")
+        
+        # Extract features for current data
+        X, _ = self.prepare_features([current_data])
+        X_scaled = self.scaler.transform(X)
+        
+        # Get prediction probability
+        prediction_proba = self.model.predict_proba(X_scaled)[0]
+        win_probability = prediction_proba[1]
+        
+        # Calculate base confidence (distance from 0.5)
+        base_confidence = abs(win_probability - 0.5) * 2
+        
+        # Get warning signals
+        warning_signals = self.warning_system.calculate_warning_signals(current_data)
+        warning_status = self.warning_system.get_warning_status(warning_signals)
+        
+        # Adjust confidence based on warning signals
+        if warning_status.get('composite', False):
+            confidence_penalty = 0.2  # Reduce confidence during warning periods
+            adjusted_confidence = max(0.0, base_confidence - confidence_penalty)
+        else:
+            adjusted_confidence = base_confidence
+        
+        # Get dynamic threshold
+        dynamic_threshold = self.threshold_manager.calculate_dynamic_threshold()
+        
+        return {
+            'win_probability': win_probability,
+            'base_confidence': base_confidence,
+            'adjusted_confidence': adjusted_confidence,
+            'dynamic_threshold': dynamic_threshold,
+            'should_bet': adjusted_confidence > dynamic_threshold,
+            'warning_signals': warning_signals,
+            'warning_status': warning_status,
+            'kelly_size': self._calculate_kelly_size(win_probability, adjusted_confidence)
+        }
+    
+    def _calculate_kelly_size(self, probability: float, confidence: float) -> float:
+        """Calculate Kelly criterion bet size with confidence adjustment"""
+        if probability <= 0.5:
+            return 0.0
+        
+        # Standard Kelly for betting odds of 1.91 (-110)
+        edge = probability - (1 / 1.91)
+        if edge <= 0:
+            return 0.0
+        
+        kelly_fraction = edge / (1.91 - 1)
+        
+        # Adjust by confidence and apply conservative scaling
+        adjusted_kelly = kelly_fraction * confidence * self.config.kelly_fraction
+        
+        # Cap at reasonable maximum
+        return min(adjusted_kelly, 0.1)
+    
+    def update_performance(self, prediction_result: Dict[str, float], actual_outcome: bool):
+        """Update model performance tracking"""
+        self.threshold_manager.record_prediction_result(
+            prediction_result['adjusted_confidence'],
+            actual_outcome
+        )
+
+
+# ============================================
+# ENHANCED BETTING ENGINE
+# ============================================
+
+
+class EnhancedLucianBettingEngine:
+    """Main engine with advanced ML techniques and real-time adaptation"""
+    
+    def __init__(self, config: DynamicConfig = None):
+        self.config = config or DynamicConfig()
+        self.model = EnhancedMLBettingModel(self.config)
+        self.performance_history = []
+        
+    def train_model(self, historical_data: List[Dict]):
+        """Train the enhanced model on historical data"""
+        self.model.train(historical_data)
+        
+    def analyze_opportunity(self, current_data: pd.DataFrame) -> Optional[Dict]:
+        """Analyze a potential betting opportunity"""
+        try:
+            # Get prediction with enhanced confidence assessment
+            prediction = self.model.predict_with_confidence(current_data)
+            
+            if not prediction['should_bet']:
+                return None
+            
+            # Generate comprehensive recommendation
+            recommendation = {
+                'timestamp': datetime.now(),
+                'win_probability': prediction['win_probability'],
+                'confidence': prediction['adjusted_confidence'],
+                'kelly_size': prediction['kelly_size'],
+                'dynamic_threshold': prediction['dynamic_threshold'],
+                'warning_signals': prediction['warning_signals'],
+                'recommendation': 'BET' if prediction['should_bet'] else 'PASS',
+                'reasoning': self._generate_reasoning(prediction)
+            }
+            
+            return recommendation
+            
+        except Exception as e:
+            logger.error(f"Error analyzing opportunity: {e}")
+            return None
+    
+    def _generate_reasoning(self, prediction: Dict) -> str:
+        """Generate human-readable reasoning for the recommendation"""
+        reasoning_parts = []
+        
+        # Base model confidence
+        reasoning_parts.append(f"Model confidence: {prediction['adjusted_confidence']:.2%}")
+        
+        # Dynamic threshold adaptation
+        reasoning_parts.append(f"Dynamic threshold: {prediction['dynamic_threshold']:.2%}")
+        
+        # Warning signals status
+        active_warnings = [k for k, v in prediction['warning_status'].items() if v]
+        if active_warnings:
+            reasoning_parts.append(f"Active warnings: {', '.join(active_warnings)}")
+        else:
+            reasoning_parts.append("No active warning signals")
+        
+        # Kelly sizing
+        if prediction['kelly_size'] > 0:
+            reasoning_parts.append(f"Suggested bet size: {prediction['kelly_size']:.1%}")
+        
+        return " | ".join(reasoning_parts)
+    
+    def get_performance_summary(self) -> Dict[str, float]:
+        """Get comprehensive performance summary"""
+        threshold_metrics = self.model.threshold_manager.get_performance_metrics()
+        
+        summary = {
+            'total_predictions': len(self.performance_history),
+            'dynamic_threshold': self.model.threshold_manager.calculate_dynamic_threshold(),
+            **threshold_metrics
+        }
+        
+        return summary
+
+
+# ============================================
+# EXAMPLE USAGE AND DEMONSTRATION
+# ============================================
+
+
+def demonstrate_enhanced_engine():
+    """Demonstrate the enhanced betting engine capabilities"""
+    logger.info("=== Enhanced Lucian Betting Engine v5.0 Demonstration ===")
+    
+    # Create enhanced configuration
+    config = DynamicConfig(
+        base_confidence_threshold=0.12,
+        max_daily_bets=3,
+        kelly_fraction=0.2
+    )
+    
+    # Initialize enhanced engine
+    engine = EnhancedLucianBettingEngine(config)
+    
+    # Generate sample training data
+    training_data = []
+    for i in range(100):
+        # Create sample historical data window
+        sample_data = pd.DataFrame({
+            'price': np.random.randn(50).cumsum() + 100,
+            'volume': np.random.randint(1000, 10000, 50)
+        })
+        
+        # Random outcome for demonstration
+        outcome = np.random.choice([True, False], p=[0.55, 0.45])
+        
+        training_data.append({
+            'historical_data': sample_data,
+            'actual_outcome': outcome
+        })
+    
+    # Train the model
+    engine.train_model(training_data)
+    
+    # Demonstrate analysis of current opportunity
+    current_market_data = pd.DataFrame({
+        'price': np.random.randn(30).cumsum() + 100,
+        'volume': np.random.randint(1000, 10000, 30)
+    })
+    
+    recommendation = engine.analyze_opportunity(current_market_data)
+    
+    if recommendation:
+        print("\n🎯 BETTING OPPORTUNITY IDENTIFIED")
+        print("=" * 50)
+        print(f"Win Probability: {recommendation['win_probability']:.1%}")
+        print(f"Confidence: {recommendation['confidence']:.1%}")
+        print(f"Suggested Bet Size: {recommendation['kelly_size']:.1%}")
+        print(f"Reasoning: {recommendation['reasoning']}")
+        print("\nWarning Signals:")
+        for signal, value in recommendation['warning_signals'].items():
+            print(f"  {signal}: {value:.3f}")
+    else:
+        print("\n📊 No betting opportunities meet current thresholds")
+    
+    # Show performance summary
+    performance = engine.get_performance_summary()
+    print(f"\n📈 Performance Summary:")
+    print(f"Dynamic Threshold: {performance['dynamic_threshold']:.1%}")
+    print(f"Recent Accuracy: {performance.get('accuracy', 0):.1%}")
+
+
+if __name__ == "__main__":
+    demonstrate_enhanced_engine()
