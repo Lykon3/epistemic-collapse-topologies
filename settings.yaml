@@ -1,0 +1,5 @@
+api_key: "YOUR_API_KEY"
+sport_key: "baseball_mlb"
+region: "us"
+market: "h2h"
+kelly_fraction: 0.01
